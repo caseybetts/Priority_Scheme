@@ -2,10 +2,7 @@
 
 import math
 
-# Variables
-coefficient = .47
-powers = 10
-rng = 100
+
 
 class Order:
     """This is an instance of an order along with the weather preditction for a given access"""
@@ -15,9 +12,14 @@ class Order:
         self.price = float(price)
         self.priority = int(priority)
 
+        # Variables
+        self.coefficient = .47
+        self.powers = 10
+        self.rng = 100
+
         self.score = self.score()
         self.weather_dollars = self.price * self.weather
 
     # Returns the score for a given priority
     def score(self):
-        return math.exp(coefficient*(powers-(5*self.priority)/rng))
+        return math.exp(self.coefficient*(self.powers-(5*self.priority)/self.rng))
