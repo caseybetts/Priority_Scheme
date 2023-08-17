@@ -117,6 +117,23 @@ if __name__ == "__main__":
     # Create and shuffle the secondary list of order objects
     orderlist2 = orderlist1.copy()
 
-    all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
+    print(len(orderlist1))
+    # run all_vals
+    #all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
+    #print(revenue_calculator.stats(all_vals))
 
-    print(revenue_calculator.stats(all_vals))
+
+
+# To do
+# 1.1 *Arc) Create a selection of orders that would be accessable on one rev
+# 1.2 *Arc) Create a cloud cover list. A list of possible cloud cover values that is proportionate to global cc values
+# 2. For each order a cloud cover needs to be randomly assigned
+# 3. Each order will have a priority applied and then can be mapped to the score
+# 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
+# 5.1 For every 2 degrees of latitude find all orders that fall within the lat bucket
+# 5.2 Compare total scores for each order and select the highest value
+# 5.3 Randomly decide if the order is clear where the chance of being clear is (1 - the cloud cover score)
+# 5.4 Update the $ made for the lat bucket
+# 6.1 Sum the $ made for all the lat buckets
+# 6.2 Return the total $ for this particular prioritization scheme
+# 7 Use gradient decent to determine best prioritization using each pri value as a dimension  
