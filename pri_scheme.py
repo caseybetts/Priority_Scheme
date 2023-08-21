@@ -2,10 +2,11 @@
 # This is a calulator for optimizing a priority scheme
 
 import csv
+import pandas as pd
 import random
 from Order import *
 
-class Revenue_Calculator():
+class Revenue_Calculator:
     """ Contains the functions required to calculate revenu for multiple iterations of a given priority curve """
 
     def __init__(self) -> None:
@@ -13,10 +14,15 @@ class Revenue_Calculator():
         # Set variables
         self.weather_floor = .5
 
+        # Score Curve Variables
+        self.coefficient = .47
+        self.powers = 10
+        self.range = 100
+
         # Run initial functions
         self.load_csv()
 
-    def load_csv(self):
+    def load_data(self):
         """ Load the csv files """
 
         with open("CloudandOrderSample.csv", "r") as f:
@@ -30,6 +36,7 @@ class Revenue_Calculator():
 
         for i in self.primary_order:
             order = Order(i[0],i[1],i[2])
+            order.set_score(self.coefficient, self.powers, self.range)
             orders.append(order)
 
         return orders
@@ -127,12 +134,12 @@ if __name__ == "__main__":
 # To do
 # 1.1 *Arc) Create a selection of orders that would be accessable on one rev
 # 1.2 *Arc) Create a cloud cover list. A list of possible cloud cover values that is proportionate to global cc values
-# 2. For each order a cloud cover needs to be randomly assigned
+# 2. For each order assign a random cloud cover
 # 3. Each order will have a priority applied and then can be mapped to the score
 # 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
 # 5.1 For every 2 degrees of latitude find all orders that fall within the lat bucket
 # 5.2 Compare total scores for each order and select the highest value
-# 5.3 Randomly decide if the order is clear where the chance of being clear is (1 - the cloud cover score)
+# 5.3 Randomly decide if the order is clear where the chance of being clear is (1 - the cloud cover score + (random(1,-1) * uncertainty))
 # 5.4 Update the $ made for the lat bucket
 # 6.1 Sum the $ made for all the lat buckets
 # 6.2 Return the total $ for this particular prioritization scheme

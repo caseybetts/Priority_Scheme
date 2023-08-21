@@ -2,6 +2,12 @@
 multisensor_active_orders_ufp.*
 EA_ONV.*
 multisensor_active_orders_ufp_rev11413.*
+GE01_90dayStrips_11413.*
+WV01_90dayStrips_11413.*
+WV02_90dayStrips_11413.*
+WV03_90dayStrips_11413.*
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -12,14 +12,8 @@ class Order:
         self.price = float(price)
         self.priority = int(priority)
 
-        # Variables
-        self.coefficient = .47
-        self.powers = 10
-        self.rng = 100
-
-        self.score = self.score()
         self.weather_dollars = self.price * self.weather
 
     # Returns the score for a given priority
-    def score(self):
-        return math.exp(self.coefficient*(self.powers-(5*self.priority)/self.rng))
+    def set_score(self, coefficient, powers, _range):
+        self.score = math.exp(coefficient*(powers-(5*self.priority)/_range))
