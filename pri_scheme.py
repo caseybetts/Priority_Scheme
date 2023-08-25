@@ -3,6 +3,7 @@
 
 import csv
 import pandas as pd
+import geopandas as gpd
 import random
 from Order import *
 
@@ -20,7 +21,7 @@ class Revenue_Calculator:
         self.range = 100
 
         # Run initial functions
-        self.load_csv()
+        self.load_data()
 
     def load_data(self):
         """ Load the csv files """
@@ -29,6 +30,10 @@ class Revenue_Calculator:
             self.primary_order = list(csv.reader(f, delimiter=","))
         
         self.primary_order[0][0] = 0.564961 # fix a formatting issue
+
+        GE90day = dbf.read_dbf("Zipped Shapes\GE01_90dayStrips_11413.dbf")
+
+        print(GE90day.head())
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
