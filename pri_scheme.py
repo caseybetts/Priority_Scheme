@@ -11,7 +11,7 @@ class Revenue_Calculator:
     """ Contains the functions required to calculate revenu for multiple iterations of a given priority curve """
 
     def __init__(self) -> None:
-        
+
         # Set variables
         self.weather_floor = .5
 
@@ -30,10 +30,6 @@ class Revenue_Calculator:
             self.primary_order = list(csv.reader(f, delimiter=","))
         
         self.primary_order[0][0] = 0.564961 # fix a formatting issue
-
-        GE90day = dbf.read_dbf("Zipped Shapes\GE01_90dayStrips_11413.dbf")
-
-        print(GE90day.head())
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
@@ -129,7 +125,6 @@ if __name__ == "__main__":
     # Create and shuffle the secondary list of order objects
     orderlist2 = orderlist1.copy()
 
-    print(len(orderlist1))
     # run all_vals
     #all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
     #print(revenue_calculator.stats(all_vals))
