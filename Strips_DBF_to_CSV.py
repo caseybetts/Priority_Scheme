@@ -53,7 +53,7 @@ def dataframe_to_csv(dataframe):
 
     dataframe.to_csv('cloudcover.csv')
 
-def create_csv():
+def run_all():
     """ Use the helper functions to create a usable dataframe for cloud cover"""
 
     df_list = load_dbf_to_dataframe()
@@ -63,7 +63,7 @@ def create_csv():
 
 if __name__ == "__main__":
 
-    create_csv()
+    run_all()
 
 
 
