@@ -12,6 +12,10 @@ class Revenue_Calculator:
 
     def __init__(self) -> None:
 
+        # File locations
+        self.active_orders_location = "active_orders.csv"
+        self.cloud_cover_values_location = "cloudcover.csv"
+
         # Set variables
         self.weather_floor = .5
 
@@ -24,12 +28,32 @@ class Revenue_Calculator:
         self.load_data()
 
     def load_data(self):
-        """ Load the csv files """
+        """ Load the csv files into pandas dataframes """
 
-        with open("CloudandOrderSample.csv", "r") as f:
-            self.primary_order = list(csv.reader(f, delimiter=","))
+        self.active_orders = pd.read_csv(self.active_orders_location)
+        self.cloud_cover_values = pd.read_csv(self.cloud_cover_values_location)
+
+        # Clean dataframes
+        self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
+
+    def add_weather_predictions(self):
+        """ Populate a predicted cloud cover column in the active_orders dataframe with
+            a randomly selected value from the cloud_cover dataframe with a similar latitude """
         
-        self.primary_order[0][0] = 0.564961 # fix a formatting issue
+        active_latitudes = set(self.active_orders.Latitude)
+
+        self.active_orders["Predicted_CC"] = 0
+
+        for latitude in active_latitudes:
+
+            choices = list(self.cloud_cover_values[
+                (self.cloud_cover_values.Latitude < latitude + 2) & 
+                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
+
+            self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
+                                                                        if (x.Latitude == latitude) 
+                                                                        else  x.Predicted_CC, axis=1)
+
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
@@ -119,11 +143,7 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    # Create list of order objects
-    orderlist1 = revenue_calculator.create_orders()
-
-    # Create and shuffle the secondary list of order objects
-    orderlist2 = orderlist1.copy()
+    revenue_calculator.add_weather_predictions()
 
     # run all_vals
     #all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
