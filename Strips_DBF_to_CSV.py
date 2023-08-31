@@ -1,5 +1,5 @@
 # Author: Casey Betts, 2023
-# This file holds a class to receive 90 day strip .dbf files and output a .csv
+# This file holds functions needed to receive 90 day strip .dbf files and combine them into a .csv
 
 import pandas as pd
 import geopandas as gpd 
@@ -10,18 +10,17 @@ strip_file_locations = ["Rev11413\GE01_90dayStrips_11413.dbf",
                         "Rev11413\WV02_90dayStrips_11413.dbf",
                         "Rev11413\WV03_90dayStrips_11413.dbf"]
     
-
-
 def load_dbf_to_dataframe():
-    """ Given one or more dbf files from the 90 day strips, 
+    """ Using a list of dbf file locations of the 90 day strips, 
     will return a pandas dataframe for each in a list"""
 
     dataframe_list = []
 
     for location in strip_file_locations:        
         # Create dataframes and add them to a list
-        dataframe = gpd.read_file(location)
-        dataframe_list.append(dataframe)
+        dataframe = gpd.read_file(location)     # read in the dbf to a geodataframe
+        dataframe = pd.DataFrame(dataframe)     # convert to a pandas dataframe
+        dataframe_list.append(dataframe)        # append to the list to be returned
 
     return dataframe_list
 

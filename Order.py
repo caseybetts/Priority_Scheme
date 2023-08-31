@@ -3,8 +3,6 @@
 import math
 from random import choice
 
-print("mychoice", choice([1,2,3]))
-
 class Order:
     """This is an instance of an order along with the weather preditction for a given access"""
 
