@@ -53,6 +53,20 @@ class Revenue_Calculator:
             self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
                                                                         if (x.Latitude == latitude) 
                                                                         else  x.Predicted_CC, axis=1)
+    
+    def dollar_value_logic(self, customer):
+        """ Given a customer number will return a dollar per sqkm value """
+
+        pass
+
+
+
+    def add_dollar_values(self):
+        """ Populate DOLPERSQKM column with dollar values based on existing dollar value or customer """
+
+        self.active_orders.DOLPERSQKM = self.active_orders.DOLPERSQKM.apply(    lambda x: self.dollar_value_logic(x.SAP_CUS)
+                                                                                if (x.DOLPERSQKM == 0)
+                                                                                else x.DOLPERSQKM, axis=1)
 
 
     def create_orders(self):
@@ -155,7 +169,8 @@ if __name__ == "__main__":
 # 1.1 *Arc) Create a selection of orders that would be accessable on one rev
 # 1.2 *Arc) Create a cloud cover list. A list of possible cloud cover values that is proportionate to global cc values
 # 2. For each order assign a random cloud cover
-# 3. Each order will have a priority applied and then can be mapped to the score
+# 3.1 Apply a dollar value to each order
+# 3.2 Assign a priority to each order based on dollar value
 # 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
 # 5.1 For every 2 degrees of latitude find all orders that fall within the lat bucket
 # 5.2 Compare total scores for each order and select the highest value
@@ -163,4 +178,5 @@ if __name__ == "__main__":
 # 5.4 Update the $ made for the lat bucket
 # 6.1 Sum the $ made for all the lat buckets
 # 6.2 Return the total $ for this particular prioritization scheme
+# 6.3 Run model 100 times to simulate different cloud cover possibilities
 # 7 Use gradient decent to determine best prioritization using each pri value as a dimension  
