@@ -15,7 +15,7 @@ def load_dbf_to_dataframe():
 def clean_msof_df(msof_dataframe):
     """ Given a multisensor_active_orders_ufp dataframe, this will remove unnecessary fields"""
 
-    columns_to_drop = ['ORDER_NUMB', 'LINE_NUMBE', 'PROD_LEVEL',
+    columns_to_drop = ['SOLI', 'ORDER_NUMB', 'LINE_NUMBE', 'PROD_LEVEL',
        'START_DATE', 'END_DATE', 'SUBMITTED', 'CHANGE_DAT', 'ACTIVEDATE','SAP_CON', 
        'DESCRIPTI', 'PURCHASE_O', 'SAP_LIC', 'V_MARKET',
        'SALES_ORG', 'RESP_LEVEL', 'WV01', 'WV02', 'WV03',       
@@ -33,13 +33,15 @@ def clean_msof_df(msof_dataframe):
        'WV2TDIM12', 'WV2TDIOM12', 'WV2TDIM34', 'WV2TDIOM34', 'WV2TDIM56',     
        'WV2TDIOM56', 'WV2TDIM78', 'WV2TDIOM78', 'WV03_BAND', 'WV3TDIPAN',     
        'WV3TDIOPN', 'WV3TDIM12', 'WV3TDIOM12', 'WV3TDIM34', 'WV3TDIOM34',     
-       'WV3TDIM56', 'WV3TDIOM56', 'WV3TDIM78', 'WV3TDIOM78', 'WV3EXPSWA',     
+       'WV3TDIM56', 'WV3TDIOM56', 'WV3TDIM78', 'WV3TDIOM78', 'WV3EXPSWA',    
        'WV3EXPOSWA', 'WV3EXPSWB', 'WV3EXPOSWB', 'WV3EXPCVS', 'WV3EXPOCVS',
        'GE1TDIM1_3', 'GE1TDIOM13', 'GE1TDIM2_4', 'GE1TDIOM24', 'QB02_BAND',
        'QB2TDIPM1', 'QB2TDIOPM1', 'GE01_BAND', 'GE1TDIPAN', 'GE1TDIOPN',
        'Test_Pri', 'geometry']
    
     msof_dataframe.drop(labels=columns_to_drop, axis=1, inplace=True)
+
+    msof_dataframe.rename(columns={"SAP_CUS": "Cust_Num", "TASK_PRIOR": 'Task_Pri',"DOLPERSQKM": "DollarPerSquare"}, inplace=True)
 
     return msof_dataframe
 

@@ -7,6 +7,24 @@ import geopandas as gpd
 import random
 from Order import *
 
+zero_dollar_cust_dpsqkm = { 82: 1, 
+                            306: 2,
+                            326: 2, 
+                            331: 10, 
+                            361: 5, 
+                            366: 4,
+                            381: 3,
+                            10250: 15, 
+                            12620: 14, 
+                            12711: 14, 
+                            20583: 20,
+                            35915: 11, 
+                            44924: 7,
+                            58480: 13,
+                            60569: 10,
+                            60603: 9, 
+                            100069: 8}
+
 class Revenue_Calculator:
     """ Contains the functions required to calculate revenu for multiple iterations of a given priority curve """
 
@@ -26,6 +44,7 @@ class Revenue_Calculator:
 
         # Run initial functions
         self.load_data()
+        self.add_weather_predictions()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -53,20 +72,13 @@ class Revenue_Calculator:
             self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
                                                                         if (x.Latitude == latitude) 
                                                                         else  x.Predicted_CC, axis=1)
-    
-    def dollar_value_logic(self, customer):
-        """ Given a customer number will return a dollar per sqkm value """
-
-        pass
-
-
 
     def add_dollar_values(self):
-        """ Populate DOLPERSQKM column with dollar values based on existing dollar value or customer """
+        """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
 
-        self.active_orders.DOLPERSQKM = self.active_orders.DOLPERSQKM.apply(    lambda x: self.dollar_value_logic(x.SAP_CUS)
-                                                                                if (x.DOLPERSQKM == 0)
-                                                                                else x.DOLPERSQKM, axis=1)
+        # Use .loc to locate all orders whith a customer in the zero dollar dictionary
+        # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
+        self.active_orders.loc[self.active_orders.Cust_Num.isin(zero_dollar_cust_dpsqkm.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(zero_dollar_cust_dpsqkm)
 
 
     def create_orders(self):
@@ -157,7 +169,9 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    revenue_calculator.add_weather_predictions()
+    revenue_calculator.add_dollar_values()
+
+    revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
     # run all_vals
     #all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
