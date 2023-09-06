@@ -36,6 +36,7 @@ class Revenue_Calculator:
 
         # Set variables
         self.weather_floor = .5
+        self.variable_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
 
         # Score Curve Variables
         self.coefficient = .47
@@ -45,6 +46,7 @@ class Revenue_Calculator:
         # Run initial functions
         self.load_data()
         self.add_weather_predictions()
+        self.add_dollar_values()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -76,10 +78,44 @@ class Revenue_Calculator:
     def add_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
 
-        # Use .loc to locate all orders whith a customer in the zero dollar dictionary
+        # Use .loc to locate all orders with a customer in the zero dollar dictionary
         # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
         self.active_orders.loc[self.active_orders.Cust_Num.isin(zero_dollar_cust_dpsqkm.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(zero_dollar_cust_dpsqkm)
 
+    def add_priority(self):
+        """ Add a priority to each order based on the dollar value (and potentially other factors)"""
+
+        # create a set of all unique dollar values 
+        all_dollar_values = set(self.active_orders.DollarPerSquare)
+
+        # create a dictionary for mapping dollar values to priorities 
+        dollar_to_pri_map = dict.fromkeys(all_dollar_values, 0) 
+
+        # change the dict values to the correct (starting) priorities
+        for value in dollar_to_pri_map:
+            if value > 20: dollar_to_pri_map[value] = self.variable_priorities[0]
+            if value <= 20: dollar_to_pri_map[value] = self.variable_priorities[1]  
+            if value < 15: dollar_to_pri_map[value] = self.variable_priorities[2]
+            if value < 12: dollar_to_pri_map[value] = self.variable_priorities[3]
+            if value < 10: dollar_to_pri_map[value] = self.variable_priorities[4]
+            if value < 8:  dollar_to_pri_map[value] = self.variable_priorities[5]
+            if value < 6:  dollar_to_pri_map[value] = self.variable_priorities[6]
+            if value < 4:  dollar_to_pri_map[value] = self.variable_priorities[7]
+            if value < 3:  dollar_to_pri_map[value] = self.variable_priorities[8]
+            if value < 2:  dollar_to_pri_map[value] = self.variable_priorities[9]
+            if value < 1:  dollar_to_pri_map[value] = self.variable_priorities[10]      
+            if value == 0: dollar_to_pri_map[value] = self.variable_priorities[11]
+
+        # Add a new column for the new priority
+        self.active_orders["New_Priority"] = 0
+
+        # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
+        self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
+
+    def add_score(self):
+        """ Add a score to each order based on the priority of the order """
+
+        pass
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
@@ -169,7 +205,7 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    revenue_calculator.add_dollar_values()
+    revenue_calculator.add_priority()
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
@@ -185,6 +221,7 @@ if __name__ == "__main__":
 # 2. For each order assign a random cloud cover
 # 3.1 Apply a dollar value to each order
 # 3.2 Assign a priority to each order based on dollar value
+# 3.3 Assign a score to each order based on the priority
 # 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
 # 5.1 For every 2 degrees of latitude find all orders that fall within the lat bucket
 # 5.2 Compare total scores for each order and select the highest value
