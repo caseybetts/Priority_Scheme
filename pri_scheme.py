@@ -4,6 +4,7 @@
 import csv
 import pandas as pd
 import geopandas as gpd
+import math
 import random
 from Order import *
 
@@ -47,6 +48,7 @@ class Revenue_Calculator:
         self.load_data()
         self.add_weather_predictions()
         self.add_dollar_values()
+        self.add_priority()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -112,10 +114,20 @@ class Revenue_Calculator:
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
 
+    def priority_to_score(self, priority):
+        """ Given a priority will return a score based on the FOM curve"""
+
+        # mathematical conversion from the priority to the score
+        return math.exp(self.coefficient*(self.powers-(5*priority)/self.range))
+
     def add_score(self):
         """ Add a score to each order based on the priority of the order """
 
-        pass
+        # Add a new column for the score
+        self.active_orders["Score"] = 0
+
+        # Set the score
+        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score(x.New_Priority-700), axis=1)
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
@@ -205,7 +217,7 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    revenue_calculator.add_priority()
+    revenue_calculator.add_score()
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
