@@ -49,6 +49,8 @@ class Revenue_Calculator:
         self.add_weather_predictions()
         self.add_dollar_values()
         self.add_priority()
+        self.add_score()
+        self.add_total_score()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -63,11 +65,11 @@ class Revenue_Calculator:
         """ Populate a predicted cloud cover column in the active_orders dataframe with
             a randomly selected value from the cloud_cover dataframe with a similar latitude """
         
-        active_latitudes = set(self.active_orders.Latitude)
+        self.active_latitudes = set(self.active_orders.Latitude)
 
         self.active_orders["Predicted_CC"] = 0
 
-        for latitude in active_latitudes:
+        for latitude in self.active_latitudes:
 
             choices = list(self.cloud_cover_values[
                 (self.cloud_cover_values.Latitude < latitude + 2) & 
@@ -128,6 +130,30 @@ class Revenue_Calculator:
 
         # Set the score
         self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score(x.New_Priority-700), axis=1)
+
+    def add_total_score(self):
+        """ Add a column for total score which is the score multiplied by the predicted cloud cover """
+
+        # Add a new column for the total score
+        self.active_orders["Total_Score"] = 0
+
+        # Set the total score
+        self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
+
+    def scheduled_order_list(self):
+        """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
+
+        latitude = min(self.active_latitudes)
+        scheduled_order_indexes = []
+
+        while latitude < max(self.active_latitudes) + 1:
+            order_list = self.active_orders[(self.active_orders.Latitude == latitude) | (self.active_orders.Latitude == latitude + 1)]
+            
+            if not order_list.empty:
+                max_index = order_list.Total_Score.idxmax()
+                scheduled_order_indexes.append(max_index)
+
+            latitude += 2
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
@@ -217,7 +243,7 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    revenue_calculator.add_score()
+    revenue_calculator.scheduled_order_list()
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
@@ -235,8 +261,7 @@ if __name__ == "__main__":
 # 3.2 Assign a priority to each order based on dollar value
 # 3.3 Assign a score to each order based on the priority
 # 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
-# 5.1 For every 2 degrees of latitude find all orders that fall within the lat bucket
-# 5.2 Compare total scores for each order and select the highest value
+# 5.1 For every 2 degrees of latitude compare total scores for each order and select the highest value for all orders that fall within the lat bucket
 # 5.3 Randomly decide if the order is clear where the chance of being clear is (1 - the cloud cover score + (random(1,-1) * uncertainty))
 # 5.4 Update the $ made for the lat bucket
 # 6.1 Sum the $ made for all the lat buckets
