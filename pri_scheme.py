@@ -46,12 +46,12 @@ class Revenue_Calculator:
 
         # Run initial functions
         self.load_data()
-        self.add_weather_predictions()
-        self.add_dollar_values()
-        self.add_priority()
-        self.add_score()
-        self.add_total_score()
-        self.add_scheduled_state_and_clear_state()
+        self.add_columns()
+        self.populate_weather_predictions()
+        self.populate_dollar_values()
+        self.populate_priority()
+        self.populate_score()
+        self.populate_total_score()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -62,13 +62,21 @@ class Revenue_Calculator:
         # Clean dataframes
         self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
 
-    def add_weather_predictions(self):
+    def add_columns(self):
+        """ Add the necessary columns and fill with a placeholder value"""
+
+        self.active_orders["Predicted_CC"] = 0
+        self.active_orders["New_Priority"] = 0
+        self.active_orders["Score"] = 0
+        self.active_orders["Total_Score"] = 0
+        self.active_orders["Scheduled"] = False 
+        self.active_orders["Clear"] = False
+
+    def populate_weather_predictions(self):
         """ Populate a predicted cloud cover column in the active_orders dataframe with
             a randomly selected value from the cloud_cover dataframe with a similar latitude """
         
         self.active_latitudes = set(self.active_orders.Latitude)
-
-        self.active_orders["Predicted_CC"] = 0
 
         for latitude in self.active_latitudes:
 
@@ -80,14 +88,14 @@ class Revenue_Calculator:
                                                                         if (x.Latitude == latitude) 
                                                                         else  x.Predicted_CC, axis=1)
 
-    def add_dollar_values(self):
+    def populate_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
 
         # Use .loc to locate all orders with a customer in the zero dollar dictionary
         # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
         self.active_orders.loc[self.active_orders.Cust_Num.isin(zero_dollar_cust_dpsqkm.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(zero_dollar_cust_dpsqkm)
 
-    def add_priority(self):
+    def populate_priority(self):
         """ Add a priority to each order based on the dollar value (and potentially other factors)"""
 
         # create a set of all unique dollar values 
@@ -111,9 +119,6 @@ class Revenue_Calculator:
             if value < 1:  dollar_to_pri_map[value] = self.variable_priorities[10]      
             if value == 0: dollar_to_pri_map[value] = self.variable_priorities[11]
 
-        # Add a new column for the new priority
-        self.active_orders["New_Priority"] = 0
-
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
 
@@ -123,29 +128,17 @@ class Revenue_Calculator:
         # mathematical conversion from the priority to the score
         return math.exp(self.coefficient*(self.powers-(5*priority)/self.range))
 
-    def add_score(self):
-        """ Add a score to each order based on the priority of the order """
-
-        # Add a new column for the score
-        self.active_orders["Score"] = 0
+    def populate_score(self):
+        """ populate a score to each order based on the priority of the order """
 
         # Set the score
         self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score(x.New_Priority-700), axis=1)
 
-    def add_total_score(self):
-        """ Add a column for total score which is the score multiplied by the predicted cloud cover """
-
-        # Add a new column for the total score
-        self.active_orders["Total_Score"] = 0
+    def populate_total_score(self):
+        """ populate a column for total score which is the score multiplied by the predicted cloud cover """
 
         # Set the total score
         self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
-
-    def add_scheduled_state_and_clear_state(self):
-        """ Add columns for scheduled state and clear state"""
-
-        self.active_orders["Scheduled"] = False 
-        self.active_orders["Clear"] = False
 
     def scheduled_order_list(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
@@ -161,6 +154,9 @@ class Revenue_Calculator:
                 self.active_orders.iloc[max_index, 8 ] = True
 
             latitude += 2
+
+
+
 
     def create_orders(self):
         """ Creates all the order objects and returns them in a list"""
