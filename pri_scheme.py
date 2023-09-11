@@ -51,6 +51,7 @@ class Revenue_Calculator:
         self.add_priority()
         self.add_score()
         self.add_total_score()
+        self.add_scheduled_state_and_clear_state()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -140,6 +141,12 @@ class Revenue_Calculator:
         # Set the total score
         self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
 
+    def add_scheduled_state_and_clear_state(self):
+        """ Add columns for scheduled state and clear state"""
+
+        self.active_orders["Scheduled"] = False 
+        self.active_orders["Clear"] = False
+
     def scheduled_order_list(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
 
@@ -151,7 +158,7 @@ class Revenue_Calculator:
             
             if not order_list.empty:
                 max_index = order_list.Total_Score.idxmax()
-                scheduled_order_indexes.append(max_index)
+                self.active_orders.iloc[max_index, 8 ] = True
 
             latitude += 2
 
