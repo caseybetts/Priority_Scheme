@@ -140,7 +140,7 @@ class Revenue_Calculator:
         # Set the total score
         self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
 
-    def scheduled_order_list(self):
+    def schedule_orders(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
 
         latitude = min(self.active_latitudes)
@@ -155,7 +155,12 @@ class Revenue_Calculator:
 
             latitude += 2
 
+    def set_clear_orders(self):
+        """ Randomly populate change the scheduled order's clear column with True based on their predicted CC"""
 
+        self.active_orders.loc[self.active_orders.Scheduled == True, 9].apply(lambda x: True
+                                                                                                                if (.99 > x.Predicted_CC)
+                                                                                                                else False, axis=1)                                                                                                  
 
 
     def create_orders(self):
@@ -246,7 +251,7 @@ if __name__ == "__main__":
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
 
-    revenue_calculator.scheduled_order_list()
+    revenue_calculator.schedule_orders()
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
