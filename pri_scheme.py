@@ -33,8 +33,8 @@ class Revenue_Calculator:
         self.cloud_cover_values_location = "cloudcover.csv"
 
         # Set variables
-        self.weather_floor = .5
-        self.variable_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
+        self.initial_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
+        self.number_of_scenarios = 5
 
         # Score Curve Variables
         self.coefficient = .47
@@ -45,10 +45,6 @@ class Revenue_Calculator:
         self.load_data()
         self.add_columns()
         self.populate_dollar_values()
-        self.populate_priority()
-        self.populate_score()
-        self.populate_total_score()
-        self.populate_weather_predictions()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -81,7 +77,7 @@ class Revenue_Calculator:
         # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
         self.active_orders.loc[self.active_orders.Cust_Num.isin(zero_dollar_cust_dpsqkm.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(zero_dollar_cust_dpsqkm)
 
-    def populate_priority(self):
+    def populate_priority(self, priority_list):
         """ Add a priority to each order based on the dollar value (and potentially other factors)"""
 
         # create a set of all unique dollar values 
@@ -92,18 +88,18 @@ class Revenue_Calculator:
 
         # change the dict values to the correct (starting) priorities
         for value in dollar_to_pri_map:
-            if value > 20: dollar_to_pri_map[value] = self.variable_priorities[0]
-            if value <= 20: dollar_to_pri_map[value] = self.variable_priorities[1]  
-            if value < 15: dollar_to_pri_map[value] = self.variable_priorities[2]
-            if value < 12: dollar_to_pri_map[value] = self.variable_priorities[3]
-            if value < 10: dollar_to_pri_map[value] = self.variable_priorities[4]
-            if value < 8:  dollar_to_pri_map[value] = self.variable_priorities[5]
-            if value < 6:  dollar_to_pri_map[value] = self.variable_priorities[6]
-            if value < 4:  dollar_to_pri_map[value] = self.variable_priorities[7]
-            if value < 3:  dollar_to_pri_map[value] = self.variable_priorities[8]
-            if value < 2:  dollar_to_pri_map[value] = self.variable_priorities[9]
-            if value < 1:  dollar_to_pri_map[value] = self.variable_priorities[10]      
-            if value == 0: dollar_to_pri_map[value] = self.variable_priorities[11]
+            if value > 20: dollar_to_pri_map[value] = priority_list[0]
+            if value <= 20: dollar_to_pri_map[value] = priority_list[1]  
+            if value < 15: dollar_to_pri_map[value] = priority_list[2]
+            if value < 12: dollar_to_pri_map[value] = priority_list[3]
+            if value < 10: dollar_to_pri_map[value] = priority_list[4]
+            if value < 8:  dollar_to_pri_map[value] = priority_list[5]
+            if value < 6:  dollar_to_pri_map[value] = priority_list[6]
+            if value < 4:  dollar_to_pri_map[value] = priority_list[7]
+            if value < 3:  dollar_to_pri_map[value] = priority_list[8]
+            if value < 2:  dollar_to_pri_map[value] = priority_list[9]
+            if value < 1:  dollar_to_pri_map[value] = priority_list[10]      
+            if value == 0: dollar_to_pri_map[value] = priority_list[11]
 
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
@@ -176,6 +172,11 @@ class Revenue_Calculator:
     def run_scenario(self):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
 
+        # Reset the schedule by setting all 'Scheduled' and 'Clear' values to False
+        self.active_orders.Scheduled = False
+        self.active_orders.Clear = False
+
+        # Choose a new random predicted weather value for each order, then recalculate other fields to produce the total dollars
         self.populate_weather_predictions()
         self.populate_total_score()
         self.schedule_orders()
@@ -183,22 +184,26 @@ class Revenue_Calculator:
         
         return self.total_dollars()
 
-    def run_x_scenarios(self, runs):
-        """ Will run the given number of scenarios and return the average total dollar value """
+    def run_priority_scheme(self, priority_scheme):
+        """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
+
+        # Apply the given priority values to the orders
+        self.populate_priority(priority_scheme)
+        self.populate_score()
 
         average = 0
 
-        for _ in range(runs):
+        for _ in range(self.number_of_scenarios):
             average += self.run_scenario()
 
-        return average/runs
+        return average/self.number_of_scenarios
 
 
 if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-    print(revenue_calculator.run_x_scenarios(5))
+    print(revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities))
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
     # run all_vals
