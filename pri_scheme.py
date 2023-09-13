@@ -158,91 +158,19 @@ class Revenue_Calculator:
     def set_clear_orders(self):
         """ Randomly populate change the scheduled order's clear column with True based on their predicted CC"""
 
-        self.active_orders.loc[self.active_orders.Scheduled == True, 9].apply(lambda x: True
-                                                                                                                if (.99 > x.Predicted_CC)
-                                                                                                                else False, axis=1)                                                                                                  
+        # .loc function locates the "Clear" column for all orders that are activly scheduled 
+        # .apply function applies True if collect is 'actually' clear otherwise False
+        # the 'Predicted_CC' is augmented by adding a random value between -.01 and .01 in order to make the chance of clear collect not equal to the predicted chance of clear collect
+        # random.random() is used to choose a 'actual' CLEAR percentage
+        # if the percent clear is greater than the augmented predicted percent, then the image is clear
+        # therefore the chance of a collect being clear is close to the predicted chance
+        self.active_orders.loc[self.active_orders.Scheduled == True, "Clear"] = self.active_orders.apply(lambda x: True
+                                                                                        if (random.random() > (x.Predicted_CC + (random.random() - .5) * .2) )
+                                                                                        else False, axis=1)                                                                                                  
+    def total_dollars(self):
+        """ Returns the sum of all the dollars per square with a "Clear" value of True """
 
-
-    def create_orders(self):
-        """ Creates all the order objects and returns them in a list"""
-        orders = []
-
-        for i in self.primary_order:
-            order = Order(i[0],i[1],i[2])
-            order.set_score(self.coefficient, self.powers, self.range)
-            orders.append(order)
-
-        return orders
-
-    # Create a new list to contain the results of competition
-    def find_weighted_dollar_total(self, primary, competing, floor):
-        """ Given two order tables and a pri-score model, this returns the sum of the
-        weighted value of the winning orders"""
-
-        results = []
-
-        for i in range(len(primary)):
-
-            # Calculate final score for both orders
-            primary_score = primary[i].score*max(primary[i].weather, floor)
-            competing_score = competing[i].score*max(competing[i].weather, floor)
-
-            if primary_score > competing_score:
-                results.append([1, primary[i].price , primary[i].weather, primary[i].weather_dollars ])
-            else:
-                results.append([1, competing[i].price , competing[i].weather, competing[i].weather_dollars ])
-
-        # Calculate sum total of the weighted dollar value
-        results_weighted_dollar_sum = 0
-        for i in results:
-            results_weighted_dollar_sum += i[3]
-
-        return round(results_weighted_dollar_sum, 2)
-
-    def print_results(self, total_1, floor_1, total_2, floor_2):
-        """ Paramerters:
-            total_1: float dollar value
-            model_1: float model type
-            total_2: float dollar value
-            model_2: float model type"""
-
-        print(floor_1,"Total $:", round(total_1, 2), floor_2, "Total $:", round(total_2, 2))
-
-    def find_all_floor_totals(self):
-        """ Returns a list of totals for all floor values from 0, .1, .2, ..., 1 """
-        results = []
-
-        for floor in range(0,11):
-            floored_total = self.find_weighted_dollar_total(orderlist1, orderlist2, floor/10)
-            results.append(floored_total)
-            #print("For floor value:", floor/10, "Total $=", floored_total)
-
-        return results
-
-    def run_combinations(self, orderlist1, orderlist2, num):
-        """ Return a list of multiple combinations of order competition """
-        results = []
-
-        for i in range(num):
-            random.shuffle(orderlist2)
-            totals = self.find_all_floor_totals()
-            results.append(totals)
-
-        return results
-
-    def stats(self, table):
-        """ Return the max, min and average of all the tests for each floor value """
-        averages = []
-
-        for i in range(len(table[0])):
-            sum = 0
-
-            for j in table:
-                sum += j[i]
-
-            averages.append(round(sum/len(table),2))
-
-        return averages
+        return self.active_orders.loc[self.active_orders.Clear == True, 'DollarPerSquare'].sum()
 
 
 
@@ -252,6 +180,8 @@ if __name__ == "__main__":
     revenue_calculator = Revenue_Calculator()
 
     revenue_calculator.schedule_orders()
+    revenue_calculator.set_clear_orders()
+    print(revenue_calculator.total_dollars())
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
@@ -271,7 +201,6 @@ if __name__ == "__main__":
 # 4. For each order the Order score and Cloud Cover score are multiplied to give the total score
 # 5.1 For every 2 degrees of latitude compare total scores for each order and select the highest value for all orders that fall within the lat bucket
 # 5.3 Randomly decide if the order is clear where the chance of being clear is (1 - the cloud cover score + (random(1,-1) * uncertainty))
-# 5.4 Update the $ made for the lat bucket
 # 6.1 Sum the $ made for all the lat buckets
 # 6.2 Return the total $ for this particular prioritization scheme
 # 6.3 Run model 100 times to simulate different cloud cover possibilities
