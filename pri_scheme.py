@@ -1,12 +1,9 @@
 # Author: Casey Betts, 2023
 # This is a calulator for optimizing a priority scheme
 
-import csv
 import pandas as pd
-import geopandas as gpd
-import math
-import random
-from Order import *
+from math import exp
+from random import choice, random
 
 zero_dollar_cust_dpsqkm = { 82: 1, 
                             306: 2,
@@ -47,46 +44,35 @@ class Revenue_Calculator:
         # Run initial functions
         self.load_data()
         self.add_columns()
-        self.populate_weather_predictions()
         self.populate_dollar_values()
         self.populate_priority()
         self.populate_score()
         self.populate_total_score()
+        self.populate_weather_predictions()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
 
+        # Load orders and image strips .csv files into pandas dataframes
         self.active_orders = pd.read_csv(self.active_orders_location)
         self.cloud_cover_values = pd.read_csv(self.cloud_cover_values_location)
 
-        # Clean dataframes
-        self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
+        # Create variable to contain the latitudes that have orders in them
+        self.active_latitudes = set(self.active_orders.Latitude)
 
     def add_columns(self):
-        """ Add the necessary columns and fill with a placeholder value"""
+        """ Add/remove the necessary columns and fill with a placeholder value"""
 
+        # Remove unnecessary column
+        self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
+
+        # Add needed columns
         self.active_orders["Predicted_CC"] = 0
         self.active_orders["New_Priority"] = 0
         self.active_orders["Score"] = 0
         self.active_orders["Total_Score"] = 0
         self.active_orders["Scheduled"] = False 
         self.active_orders["Clear"] = False
-
-    def populate_weather_predictions(self):
-        """ Populate a predicted cloud cover column in the active_orders dataframe with
-            a randomly selected value from the cloud_cover dataframe with a similar latitude """
-        
-        self.active_latitudes = set(self.active_orders.Latitude)
-
-        for latitude in self.active_latitudes:
-
-            choices = list(self.cloud_cover_values[
-                (self.cloud_cover_values.Latitude < latitude + 2) & 
-                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
-
-            self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
-                                                                        if (x.Latitude == latitude) 
-                                                                        else  x.Predicted_CC, axis=1)
 
     def populate_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
@@ -126,7 +112,7 @@ class Revenue_Calculator:
         """ Given a priority will return a score based on the FOM curve"""
 
         # mathematical conversion from the priority to the score
-        return math.exp(self.coefficient*(self.powers-(5*priority)/self.range))
+        return exp(self.coefficient*(self.powers-(5*priority)/self.range))
 
     def populate_score(self):
         """ populate a score to each order based on the priority of the order """
@@ -140,6 +126,20 @@ class Revenue_Calculator:
         # Set the total score
         self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
 
+    def populate_weather_predictions(self):
+        """ Populate a predicted cloud cover column in the active_orders dataframe with
+            a randomly selected value from the cloud_cover dataframe with a similar latitude """
+        
+        for latitude in self.active_latitudes:
+
+            choices = list(self.cloud_cover_values[
+                (self.cloud_cover_values.Latitude < latitude + 2) & 
+                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
+
+            self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
+                                                                        if (x.Latitude == latitude) 
+                                                                        else  x.Predicted_CC, axis=1)
+    
     def schedule_orders(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
 
@@ -165,23 +165,28 @@ class Revenue_Calculator:
         # if the percent clear is greater than the augmented predicted percent, then the image is clear
         # therefore the chance of a collect being clear is close to the predicted chance
         self.active_orders.loc[self.active_orders.Scheduled == True, "Clear"] = self.active_orders.apply(lambda x: True
-                                                                                        if (random.random() > (x.Predicted_CC + (random.random() - .5) * .2) )
+                                                                                        if (random() > (x.Predicted_CC + (random() - .5) * .2) )
                                                                                         else False, axis=1)                                                                                                  
+    
     def total_dollars(self):
         """ Returns the sum of all the dollars per square with a "Clear" value of True """
 
         return self.active_orders.loc[self.active_orders.Clear == True, 'DollarPerSquare'].sum()
 
+    def run_scenario(self):
+        """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
 
+        self.populate_weather_predictions()
+        self.populate_total_score()
+        self.schedule_orders()
+        self.set_clear_orders()
+        
+        return self.total_dollars()
 
 if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-
-    revenue_calculator.schedule_orders()
-    revenue_calculator.set_clear_orders()
-    print(revenue_calculator.total_dollars())
 
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
