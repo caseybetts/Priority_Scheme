@@ -183,11 +183,22 @@ class Revenue_Calculator:
         
         return self.total_dollars()
 
+    def run_x_scenarios(self, runs):
+        """ Will run the given number of scenarios and return the average total dollar value """
+
+        average = 0
+
+        for _ in range(runs):
+            average += self.run_scenario()
+
+        return average/runs
+
+
 if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-
+    print(revenue_calculator.run_x_scenarios(5))
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
     # run all_vals
