@@ -35,7 +35,7 @@ class Revenue_Calculator:
         self.cloud_cover_values_location = "cloudcover.csv"
 
         # Set variables
-        self.initial_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
+        self.initial_priorities = [.72]*12
         self.number_of_scenarios = 10
         self.bounds = [(700,800) for x in range(12)]
         self.cloud_cover_buckets = {}
@@ -48,9 +48,10 @@ class Revenue_Calculator:
         # Run initial functions
         self.load_data()
         self.add_columns()
-        self.populate_dollar_values()
         self.create_cloud_cover_buckets()
-
+        self.populate_predicted_cc()
+        self.populate_dollar_values()
+        
     def load_data(self):
         """ Load the csv files into pandas dataframes """
 
@@ -61,6 +62,10 @@ class Revenue_Calculator:
         # Create variable to contain the latitudes that have orders in them
         self.active_latitudes = set(self.active_orders.Latitude)
 
+        # Store the min and max of the active latitudes
+        self.min_latitude = min(self.active_latitudes)
+        self.max_latitude = max(self.active_latitudes)
+
     def add_columns(self):
         """ Add/remove the necessary columns and fill with a placeholder value"""
 
@@ -68,11 +73,24 @@ class Revenue_Calculator:
         self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
 
         # Add needed columns
+        self.active_orders["Predicted_CC"] = 0
         self.active_orders["New_Priority"] = 0
         self.active_orders["Score"] = 0
         self.active_orders["Total_Score"] = 0
         self.active_orders["Scheduled"] = False 
         self.active_orders["Clear"] = False
+    
+    def create_cloud_cover_buckets(self):
+        """ Populates a dictionary where the keys are each active latitude and the values are lists of possible cloud cover values """
+
+        for latitude in self.active_latitudes:
+            self.cloud_cover_buckets[latitude] = list(self.cloud_cover_values[
+                                                (self.cloud_cover_values.Latitude < latitude + 2) & 
+                                                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
+    
+    def populate_predicted_cc(self):
+
+        self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(self.cloud_cover_buckets[x.Latitude]), axis=1)
 
     def populate_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
@@ -107,6 +125,9 @@ class Revenue_Calculator:
 
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
+        
+        # Multiply by 1000
+        self.active_orders['New_Priority'] = self.active_orders['New_Priority'] * 1000
 
     def priority_to_score(self, priority):
         """ Given a priority will return a score based on the FOM curve"""
@@ -118,29 +139,20 @@ class Revenue_Calculator:
         """ populate a score to each order based on the priority of the order """
 
         # Set the score
-        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score(x.New_Priority-700), axis=1)
+        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority)-700), axis=1)
 
     def populate_total_score(self):
-        """ populate a column for total score which is the score multiplied by the predicted cloud cover """
+        """ Populate a column for total score which is the score multiplied by the predicted cloud cover """
 
         # Set the total score
-        self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - choice(self.cloud_cover_buckets[x.Latitude])) * x.Score, axis=1)
-
-    def create_cloud_cover_buckets(self):
-        """ Populates a dictionary where the keys are each active latitude and the values are lists of possible cloud cover values """
-
-        for latitude in self.active_latitudes:
-            self.cloud_cover_buckets[latitude] = list(self.cloud_cover_values[
-                                                (self.cloud_cover_values.Latitude < latitude + 2) & 
-                                                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
+        self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
     
     def schedule_orders(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
 
-        latitude = min(self.active_latitudes)
-        scheduled_order_indexes = []
+        latitude = self.min_latitude
 
-        while latitude < max(self.active_latitudes) + 1:
+        while latitude < self.max_latitude + 1:
             order_list = self.active_orders[(self.active_orders.Latitude == latitude) | (self.active_orders.Latitude == latitude + 1)]
             
             if not order_list.empty:
@@ -159,7 +171,7 @@ class Revenue_Calculator:
         # if the percent clear is greater than the augmented predicted percent, then the image is clear
         # therefore the chance of a collect being clear is close to the predicted chance
         self.active_orders.loc[self.active_orders.Scheduled == True, "Clear"] = self.active_orders.apply(lambda x: True
-                                                                                        if (random() > ((x.Total_Score/x.Score) + (random() - .5) * .2) )
+                                                                                        if (random() > (x.Predicted_CC + (random() - .5) * .2) )
                                                                                         else False, axis=1)                                                                                                  
     
     def total_dollars(self):
@@ -184,7 +196,6 @@ class Revenue_Calculator:
 
         # Timing 
         end_time = time()
-
         print("Time elapsed for 1 scenario: ", end_time - start_time)
         
         return self.total_dollars()
