@@ -175,7 +175,7 @@ class Revenue_Calculator:
     def run_scenario(self):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
 
-        # Timing
+        # Timing 
         start_time = time()
 
         # Reset the schedule by setting all 'Scheduled' and 'Clear' values to False
