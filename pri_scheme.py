@@ -38,6 +38,7 @@ class Revenue_Calculator:
         self.initial_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
         self.number_of_scenarios = 10
         self.bounds = [(700,800) for x in range(12)]
+        self.cloud_cover_buckets = {}
 
         # Score Curve Variables
         self.coefficient = .47
@@ -48,6 +49,7 @@ class Revenue_Calculator:
         self.load_data()
         self.add_columns()
         self.populate_dollar_values()
+        self.create_cloud_cover_buckets()
 
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -66,7 +68,6 @@ class Revenue_Calculator:
         self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
 
         # Add needed columns
-        self.active_orders["Predicted_CC"] = 0
         self.active_orders["New_Priority"] = 0
         self.active_orders["Score"] = 0
         self.active_orders["Total_Score"] = 0
@@ -123,21 +124,15 @@ class Revenue_Calculator:
         """ populate a column for total score which is the score multiplied by the predicted cloud cover """
 
         # Set the total score
-        self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
+        self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - choice(self.cloud_cover_buckets[x.Latitude])) * x.Score, axis=1)
 
-    def populate_weather_predictions(self):
-        """ Populate a predicted cloud cover column in the active_orders dataframe with
-            a randomly selected value from the cloud_cover dataframe with a similar latitude """
-        
+    def create_cloud_cover_buckets(self):
+        """ Populates a dictionary where the keys are each active latitude and the values are lists of possible cloud cover values """
+
         for latitude in self.active_latitudes:
-
-            choices = list(self.cloud_cover_values[
-                (self.cloud_cover_values.Latitude < latitude + 2) & 
-                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
-
-            self.active_orders.Predicted_CC = self.active_orders.apply( lambda x: choice(choices) 
-                                                                        if (x.Latitude == latitude) 
-                                                                        else  x.Predicted_CC, axis=1)
+            self.cloud_cover_buckets[latitude] = list(self.cloud_cover_values[
+                                                (self.cloud_cover_values.Latitude < latitude + 2) & 
+                                                (self.cloud_cover_values.Latitude > latitude - 2)].CC)
     
     def schedule_orders(self):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
@@ -164,7 +159,7 @@ class Revenue_Calculator:
         # if the percent clear is greater than the augmented predicted percent, then the image is clear
         # therefore the chance of a collect being clear is close to the predicted chance
         self.active_orders.loc[self.active_orders.Scheduled == True, "Clear"] = self.active_orders.apply(lambda x: True
-                                                                                        if (random() > (x.Predicted_CC + (random() - .5) * .2) )
+                                                                                        if (random() > ((x.Total_Score/x.Score) + (random() - .5) * .2) )
                                                                                         else False, axis=1)                                                                                                  
     
     def total_dollars(self):
@@ -183,7 +178,6 @@ class Revenue_Calculator:
         self.active_orders.Clear = False
 
         # Choose a new random predicted weather value for each order, then recalculate other fields to produce the total dollars
-        self.populate_weather_predictions()
         self.populate_total_score()
         self.schedule_orders()
         self.set_clear_orders()
