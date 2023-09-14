@@ -7,9 +7,6 @@ from random import choice, random
 from scipy.optimize import minimize 
 from time import time
 
-print("This is the No predicted cc column branch")
-
-
 zero_dollar_cust_dpsqkm = { 82: 1, 
                             306: 2,
                             326: 2, 
