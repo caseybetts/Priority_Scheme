@@ -4,6 +4,8 @@
 import pandas as pd
 from math import exp
 from random import choice, random
+from scipy.optimize import minimize 
+from time import time
 
 zero_dollar_cust_dpsqkm = { 82: 1, 
                             306: 2,
@@ -34,7 +36,8 @@ class Revenue_Calculator:
 
         # Set variables
         self.initial_priorities = [700, 705, 710, 720, 730, 740, 750, 760, 770, 780, 790, 800]
-        self.number_of_scenarios = 5
+        self.number_of_scenarios = 10
+        self.bounds = [(700,800) for x in range(12)]
 
         # Score Curve Variables
         self.coefficient = .47
@@ -172,6 +175,9 @@ class Revenue_Calculator:
     def run_scenario(self):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
 
+        # Timing
+        start_time = time()
+
         # Reset the schedule by setting all 'Scheduled' and 'Clear' values to False
         self.active_orders.Scheduled = False
         self.active_orders.Clear = False
@@ -181,6 +187,11 @@ class Revenue_Calculator:
         self.populate_total_score()
         self.schedule_orders()
         self.set_clear_orders()
+
+        # Timing 
+        end_time = time()
+
+        print("Time elapsed for 1 scenario: ", end_time - start_time)
         
         return self.total_dollars()
 
@@ -196,19 +207,27 @@ class Revenue_Calculator:
         for _ in range(self.number_of_scenarios):
             average += self.run_scenario()
 
-        return average/self.number_of_scenarios
+        return -average/self.number_of_scenarios
+
+    def optimal_priorities(self):
+        """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue """
+
+        result = minimize(self.run_priority_scheme, self.initial_priorities, bounds=self.bounds, tol=5, options={'maxiter' : 5})
+
+        if result.success:
+            fitted_params = result.x
+            print(fitted_params)
+        else:
+            raise ValueError(result.message)
+        
 
 
 if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-    print(revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities))
+    revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities)
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
-
-    # run all_vals
-    #all_vals = revenue_calculator.run_combinations(orderlist1, orderlist2, 100)
-    #print(revenue_calculator.stats(all_vals))
 
 
 
