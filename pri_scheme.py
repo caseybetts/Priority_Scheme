@@ -6,24 +6,39 @@ from math import exp
 from random import choice, random
 from scipy.optimize import minimize 
 from time import time
+import matplotlib.pyplot as plt
 
 zero_dollar_cust_dpsqkm = { 82: 1, 
                             306: 2,
                             326: 2, 
                             331: 10, 
-                            361: 5, 
+                            361: 3, 
                             366: 4,
-                            381: 3,
+                            381: 2,
                             10250: 15, 
                             12620: 14, 
                             12711: 14, 
                             20583: 20,
                             35915: 11, 
-                            44924: 7,
+                            44924: 4,
                             58480: 13,
                             60569: 10,
-                            60603: 9, 
-                            100069: 8}
+                            60603: 5, 
+                            100069: 4}
+
+test_cases = [
+    [.007, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .008, .008, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .008, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .008, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .007, .008, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .007, .007, .008, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .007, .007, .007, .008, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .007, .007, .007, .007, .008, .008, .008, .008],
+    [.007, .007, .007, .007, .007, .007, .007, .007, .007, .007, .008, .008, .008],
+]
 
 class Revenue_Calculator:
     """ Contains the functions required to calculate revenu for multiple iterations of a given priority curve """
@@ -35,10 +50,11 @@ class Revenue_Calculator:
         self.cloud_cover_values_location = "cloudcover.csv"
 
         # Set variables
-        self.initial_priorities = [.72]*12
-        self.number_of_scenarios = 10
-        self.bounds = [(700,800) for x in range(12)]
+        self.initial_priorities = [.0076]*12
+        self.number_of_scenarios = 1
+        self.bounds = [(.007,.008) for x in range(12)]
         self.cloud_cover_buckets = {}
+        self.scale = 100000
 
         # Score Curve Variables
         self.coefficient = .47
@@ -50,6 +66,7 @@ class Revenue_Calculator:
         self.add_columns()
         self.create_cloud_cover_buckets()
         self.populate_predicted_cc()
+        self.set_clear_orders()
         self.populate_dollar_values()
         
     def load_data(self):
@@ -126,8 +143,8 @@ class Revenue_Calculator:
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
         
-        # Multiply by 1000
-        self.active_orders['New_Priority'] = self.active_orders['New_Priority'] * 1000
+        # Scale up from minimize function friendly to actual priority value
+        self.active_orders['New_Priority'] = self.active_orders['New_Priority'] * self.scale
 
     def priority_to_score(self, priority):
         """ Given a priority will return a score based on the FOM curve"""
@@ -147,7 +164,7 @@ class Revenue_Calculator:
         # Set the total score
         self.active_orders.Total_Score = self.active_orders.apply( lambda x: (1 - x.Predicted_CC) * x.Score, axis=1)
     
-    def schedule_orders(self):
+    def schedule_orders(self,case):
         """ Return the list of orders that are have the maximum score within their respective 2 degree lat """
 
         latitude = self.min_latitude
@@ -161,6 +178,8 @@ class Revenue_Calculator:
 
             latitude += 2
 
+        # self.active_orders[case] = self.active_orders.Scheduled
+
     def set_clear_orders(self):
         """ Randomly populate change the scheduled order's clear column with True based on their predicted CC"""
 
@@ -170,60 +189,66 @@ class Revenue_Calculator:
         # random.random() is used to choose a 'actual' CLEAR percentage
         # if the percent clear is greater than the augmented predicted percent, then the image is clear
         # therefore the chance of a collect being clear is close to the predicted chance
-        self.active_orders.loc[self.active_orders.Scheduled == True, "Clear"] = self.active_orders.apply(lambda x: True
-                                                                                        if (random() > (x.Predicted_CC + (random() - .5) * .2) )
-                                                                                        else False, axis=1)                                                                                                  
+        self.active_orders.Clear = self.active_orders.apply(lambda x: True
+                                                                if (random() > (x.Predicted_CC + (random() - .5) * .2) )
+                                                                else False, axis=1)                                                                                                  
     
     def total_dollars(self):
         """ Returns the sum of all the dollars per square with a "Clear" value of True """
 
-        return self.active_orders.loc[self.active_orders.Clear == True, 'DollarPerSquare'].sum()
+        return self.active_orders.DollarPerSquare[(self.active_orders.Scheduled == True) & (self.active_orders.Clear == True)].sum()
 
-    def run_scenario(self):
+    def run_scenario(self, case):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
-
-        # Timing 
-        start_time = time()
 
         # Reset the schedule by setting all 'Scheduled' and 'Clear' values to False
         self.active_orders.Scheduled = False
-        self.active_orders.Clear = False
 
         # Choose a new random predicted weather value for each order, then recalculate other fields to produce the total dollars
         self.populate_total_score()
-        self.schedule_orders()
-        self.set_clear_orders()
+        self.schedule_orders(case)
 
-        # Timing 
-        end_time = time()
-        print("Time elapsed for 1 scenario: ", end_time - start_time)
-        
         return self.total_dollars()
 
     def run_priority_scheme(self, priority_scheme):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
 
+        # Timing 
+        start_time = time()
+
         # Apply the given priority values to the orders
         self.populate_priority(priority_scheme)
         self.populate_score()
 
-        average = 0
+        total_dollars = self.run_scenario("1")
 
-        for _ in range(self.number_of_scenarios):
-            average += self.run_scenario()
+        # Timing 
+        end_time = time()
+        print("Priorities: ", priority_scheme)
+        print("\t\t Total $: ", total_dollars)
+        print("Time elapsed for scheme: ", end_time - start_time)
+        print("----------------------------------------------------------------")
 
-        return -average/self.number_of_scenarios
-
+        return -total_dollars
+    
     def optimal_priorities(self):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue """
 
-        result = minimize(self.run_priority_scheme, self.initial_priorities, bounds=self.bounds, tol=5, options={'maxiter' : 5})
+        result = minimize(self.run_priority_scheme, self.initial_priorities, bounds=self.bounds, tol=.1, method='Nelder-Mead')
 
         if result.success:
-            fitted_params = result.x
-            print(fitted_params)
+            print(result)
+            plt.plot(result.x)
+            plt.show()
         else:
             raise ValueError(result.message)
+        
+
+    def run_test_cases(self):
+        """ Will run the priority_scheme function for each test case priority set """
+
+        for count, scheme in enumerate(test_cases):
+            self.run_priority_scheme(scheme, count)
         
 
 
@@ -231,7 +256,9 @@ if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-    revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities)
+    revenue_calculator.optimal_priorities()
+    # revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities)
+    # revenue_calculator.run_test_cases()
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
 
