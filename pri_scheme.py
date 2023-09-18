@@ -62,6 +62,8 @@ class Revenue_Calculator:
         self.scale = 100000
         self.clear_columns = 3
         self.dollar_breaks = [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0]
+        self.average_prioritizations = []
+        self.weather_scenarios = 10
 
         # Score Curve Variables
         self.coefficient = .47
@@ -255,14 +257,30 @@ class Revenue_Calculator:
 
         average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
 
+        return average_prioritization
 
-        print("Average Prioritization: ", average_prioritization)
-        print("-----------------------------------------")
+    def run_weather_scenarios(self):
+        """ This will run the 'run clear scenarios' function for multiple weather scenarios and return an average prioritization from the results"""
+
+        prioritizations = []
+
+        for _ in range(self.weather_scenarios):
+            self.populate_predicted_cc()
+            self.set_clear_orders()
+
+            prioritization = self.run_clear_scenarios()
+            prioritizations.append(prioritization)
+
+            print("Prioritization: ", prioritization)
+            print("-----------------------------------------")
+
+        average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
 
         x_axis = [30] + self.dollar_breaks
         plt.plot(x_axis, average_prioritization)
         plt.show()
 
+        print("The final prioritization is: ", average_prioritization)
 
 
     def run_test_cases(self):
@@ -277,7 +295,7 @@ if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-    revenue_calculator.run_clear_scenarios()
+    revenue_calculator.run_weather_scenarios()
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
 
