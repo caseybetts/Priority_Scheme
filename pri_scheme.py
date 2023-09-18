@@ -60,7 +60,7 @@ class Revenue_Calculator:
         self.bounds = [(.007,.008) for x in range(12)]
         self.cloud_cover_buckets = {}
         self.scale = 100000
-        self.clear_columns = 10
+        self.clear_columns = 3
         self.dollar_breaks = [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0]
 
         # Score Curve Variables
@@ -200,62 +200,71 @@ class Revenue_Calculator:
 
             latitude += 2                                                                                         
     
-    def total_dollars(self, column):
+    def total_dollars(self, clear_column):
         """ Returns the sum of all the dollars per square with a 'Clear' value of True for a given column"""
 
-        return self.active_orders.DollarPerSquare[(self.active_orders.Scheduled == True) & (self.active_orders[column] == True)].sum()
+        return self.active_orders.DollarPerSquare[(self.active_orders.Scheduled == True) & (self.active_orders[clear_column] == True)].sum()
 
-    def run_scenario(self):
+    def run_scenario(self, clear_column):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
 
-        # Reset the schedule by setting all 'Scheduled' and 'Clear' values to False
+        # Reset the schedule by setting all 'Scheduled' to False
         self.active_orders.Scheduled = False
 
-        # Choose a new random predicted weather value for each order, then recalculate other fields to produce the total dollars
+        # Calculate the total score and which orders are scheduled
         self.populate_total_score()
         self.schedule_orders()
 
-        total = 0
+        return self.total_dollars(clear_column)
 
-        for column in range(self.clear_columns):
-            total += self.total_dollars(column)
-
-        return total/self.clear_columns
-
-    def run_priority_scheme(self, priority_scheme):
+    def run_priority_scheme(self, priority_scheme, clear_column):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
-
-        # Timing 
-        start_time = time()
 
         # Apply the given priority values to the orders
         self.populate_priority(priority_scheme)
         self.populate_score()
 
-        total_dollars = self.run_scenario()
+        return -self.run_scenario(clear_column)
+    
+    def optimal_priorities(self, clear_column):
+        """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
+
+        # Timing 
+        start_time = time()
+
+        result = minimize(self.run_priority_scheme, self.initial_priorities, args=clear_column, bounds=self.bounds, tol=.1, method='Nelder-Mead')
 
         # Timing 
         end_time = time()
-        print("Priorities: ", priority_scheme)
-        print("\t\t Total $: ", total_dollars)
         print("Time elapsed for scheme: ", end_time - start_time)
         print("----------------------------------------------------------------")
 
-        return -total_dollars
-    
-    def optimal_priorities(self):
-        """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue """
-
-        result = minimize(self.run_priority_scheme, self.initial_priorities, bounds=self.bounds, tol=.1, method='Nelder-Mead')
-
         if result.success:
-            print(result)
-            x_axis = [30] + self.dollar_breaks
-            plt.plot(x_axis, result.x)
-            plt.show()
+            return result.x
         else:
             raise ValueError(result.message)
         
+    def run_clear_scenarios(self):
+        """ This will run the optimization function for each clear scenario for the current weather scenario """
+
+        prioritizations = []
+
+        for clear_column in range(self.clear_columns):
+            prioritization = self.optimal_priorities(clear_column)
+            prioritizations.append(prioritization)
+
+        average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
+
+
+        print("Average Prioritization: ", average_prioritization)
+        print("-----------------------------------------")
+
+        x_axis = [30] + self.dollar_breaks
+        plt.plot(x_axis, average_prioritization)
+        plt.show()
+
+
+
     def run_test_cases(self):
         """ Will run the priority_scheme function for each test case priority set """
 
@@ -268,9 +277,7 @@ if __name__ == "__main__":
     
     # Create calculator object
     revenue_calculator = Revenue_Calculator()
-    revenue_calculator.optimal_priorities()
-    # revenue_calculator.run_priority_scheme(revenue_calculator.initial_priorities)
-    # revenue_calculator.run_test_cases()
+    revenue_calculator.run_clear_scenarios()
     revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
 
 
@@ -290,4 +297,8 @@ if __name__ == "__main__":
 # 6.3 Run model 100 times to simulate different cloud cover possibilities
 # 7 Use gradient decent to determine best prioritization using each pri value as a dimension  
 
-# 8 Create 10 columns where clear orders are set based on probability of being clear
+# 8 Create 3 Clear columns semi-randomly populated
+# 9 Run the optimization function and save the result over each clear column values
+# 9.1 Save the average of the three runs
+# 10 Re-run the weather column values and repeat step 9 10 times
+# 11 Average the averages for the final result
