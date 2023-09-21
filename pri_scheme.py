@@ -234,7 +234,7 @@ class Revenue_Calculator:
         # Timing 
         start_time = time()
 
-        result = minimize(self.run_priority_scheme, self.initial_priorities, args=clear_column, bounds=self.bounds, tol=.1, method='Nelder-Mead')
+        result = minimize(self.run_priority_scheme, self.initial_priorities, args=clear_column, bounds=self.bounds, tol=.01, method='Powell')
 
         # Timing 
         end_time = time()
@@ -320,3 +320,5 @@ if __name__ == "__main__":
 # 9.1 Save the average of the three runs
 # 10 Re-run the weather column values and repeat step 9 10 times
 # 11 Average the averages for the final result
+
+# 12 Create more buckets
