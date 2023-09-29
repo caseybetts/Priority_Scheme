@@ -21,8 +21,8 @@ with open(input_parameters_file_name, 'r') as input:
     parameters = json.load(input)
 
 
-class Revenue_Calculator:
-    """ Contains the functions required to calculate revenu for multiple iterations of a given priority curve """
+class Priority_Optimizer:
+    """ Contains the functions required to produce an optimal set of priorities for a given set of orders and cloud values """
 
     def __init__(self) -> None:
 
@@ -30,17 +30,23 @@ class Revenue_Calculator:
         self.active_orders_location = parameters["orders_csv"]
         self.cloud_cover_values_location = parameters["clouds_csv"]
 
-        # Set variables
-        self.zero_dollar_customer_values = parameters["zero_dollar_cust_dpsqkm"]
-        self.initial_priorities = parameters["initial_priorities"]
-        self.scale = 100000
-        self.bounds = [(parameters["priority_lower_bound"]/self.scale, parameters["priority_upper_bound"]/self.scale) for x in range(12)]
-        self.cloud_cover_buckets = {}
-
-        self.clear_columns = 3
-        self.dollar_breaks = [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0]
+        # Optimization related variables
+        self.scale = 1e-5
+        self.optimization_method = parameters["optimization method"]
+        self.optimization_tolerance = parameters["optimization tolerance"]
+        self.initial_priorities = [x * self.scale for x in parameters["initial priorities"] ]
+        self.bounds =  [ (x * self.scale, y * self.scale) for x, y in parameters["priority bounds"] ]
         self.average_prioritizations = []
-        self.weather_scenarios = 10
+        self.final_optimal_priorities = []
+
+
+        # Dataframe related variables
+        self.zero_dollar_customer_values = parameters["zero_dollar_cust_dpsqkm"]
+        self.clear_columns = parameters["number of clear column scenarios"]
+        self.dollar_breaks = parameters["dollar bin breakpoints"]
+        self.weather_scenarios = parameters["number of different weather scenarios"]
+        self.test_priorities = [x * self.scale for x in parameters["test case priorities"] ]
+        self.cloud_cover_buckets = {}
 
         # Score Curve Variables
         self.coefficient = .47
@@ -208,15 +214,12 @@ class Revenue_Calculator:
     def optimal_priorities(self, clear_column):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
 
-        # Timing 
-        start_time = time()
-
-        result = minimize(self.run_priority_scheme, self.initial_priorities, args=clear_column, bounds=self.bounds, tol=.01, method='Powell')
-
-        # Timing 
-        end_time = time()
-        print("Time elapsed for scheme: ", end_time - start_time)
-        print("----------------------------------------------------------------")
+        result = minimize(self.run_priority_scheme, 
+                          self.initial_priorities, 
+                          args=clear_column, 
+                          bounds=self.bounds, 
+                          tol=self.optimization_tolerance, 
+                          method=self.optimization_method)
 
         if result.success:
             return result.x
@@ -226,6 +229,9 @@ class Revenue_Calculator:
     def run_clear_scenarios(self):
         """ This will run the optimization function for each clear scenario for the current weather scenario """
 
+        # Timing 
+        start_time = time()
+
         prioritizations = []
 
         for clear_column in range(self.clear_columns):
@@ -233,6 +239,11 @@ class Revenue_Calculator:
             prioritizations.append(prioritization)
 
         average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
+
+                # Timing 
+        end_time = time()
+        print("Time elapsed for run_clear_scenarios: ", end_time - start_time)
+        print("----------------------------------------------------------------")
 
         return average_prioritization
 
@@ -251,28 +262,33 @@ class Revenue_Calculator:
             print("Prioritization: ", prioritization)
             print("-----------------------------------------")
 
-        average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
-
-        x_axis = [30] + self.dollar_breaks
-        plt.plot(x_axis, average_prioritization)
-        plt.show()
-
-        print("The final prioritization is: ", average_prioritization)
+        # Save the average of the prioritization sets found as the final result
+        self.final_optimal_priorities = [sum(x)/len(x) for x in zip(*prioritizations)]
 
     def run_test_cases(self):
         """ Will run the priority_scheme function for each test case priority set """
 
         for scheme in test_cases:
             self.run_priority_scheme(scheme)
-        
+
+    def display_results(self):
+        """ Will print the resulting optimal priority set as well as display a graph of the same """
+
+        print("The final prioritization is: ", self.final_optimal_priorities)
+
+        x_axis = [30] + self.dollar_breaks
+        plt.plot(x_axis, self.final_optimal_priorities)
+        plt.show()
 
 
 if __name__ == "__main__":
     
     # Create calculator object
-    revenue_calculator = Revenue_Calculator()
-    # revenue_calculator.run_weather_scenarios()
-    revenue_calculator.active_orders.to_csv('output_from_pri_scheme.csv')
+    priority_optimizer = Priority_Optimizer()
+    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
+    priority_optimizer.run_weather_scenarios()
+    priority_optimizer.display_results()
+
 
 
 
@@ -286,4 +302,5 @@ if __name__ == "__main__":
 - Make easy to submit a specific pri scheme
 - Make easy to change the number of pri bins
 - Allow to accept a JSON file with all the necessary info
+- Add in the cc tolerance to each order and factor into clear result
 """
