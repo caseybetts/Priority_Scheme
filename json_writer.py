@@ -24,7 +24,7 @@ data = {
                                     60603: 5, 
                                     100069: 4},
 
-    "initial priorities" : [    730,  
+    "initial priorities" : [    710,  
                                 752,  
                                 755,  
                                 757,  
@@ -33,9 +33,9 @@ data = {
                                 768,  
                                 769,  
                                 791,  
-                                765,
-                                757,  
-                                781],
+                                780,
+                                790,  
+                                799],
 
     "test case priorities" : [  730,  
                                 752,  
@@ -50,7 +50,7 @@ data = {
                                 757,  
                                 781],
     
-    "priority bounds" : [(700, 710),
+    "priority bounds" : [(700, 720),
                          (700, 800),
                          (700, 800),
                          (700, 800),
@@ -59,15 +59,15 @@ data = {
                          (700, 800),
                          (700, 800),
                          (700, 800),
-                         (700, 800),
+                         (780, 800),
                          (790, 800),
                          (799, 800)],
 
-    "number of clear column scenarios" : 3,
+    "number of weather scenarios" : 10,
     "dollar bin breakpoints" : [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0],
-    "number of different weather scenarios" : 3,
     "optimization method" : 'Nelder-Mead',
-    "optimization tolerance" : .01
+    "optimization tolerance" : .01,
+    "predicted cloud cover uncertainty" : .1
 
 }
 

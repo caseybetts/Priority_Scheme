@@ -21,7 +21,7 @@ def clean_msof_df(msof_dataframe):
        'SALES_ORG', 'RESP_LEVEL', 'WV01', 'WV02', 'WV03',       
        'WV03_VNIR', 'WV03_SWIR', 'WV03_CAVIS', 'GE01', 'QB02', 'BCKHL_PRIO',  
        'WV1_TIER', 'WV2_TIER', 'WV3_V_TIER', 'WV3_S_TIER', 'WV3_C_TIER',      
-       'GE1_TIER', 'QB2_TIER', 'SSR_PRIORI', 'PP_PRIORIT', 'MAX_CC',
+       'GE1_TIER', 'QB2_TIER', 'SSR_PRIORI', 'PP_PRIORIT',
        'MIN_SUN_EL', 'MAX_SUN_EL', 'MIN_SUN_AZ', 'MAX_SUN_AZ', 'MIN_TAR_AZ',  
        'MAX_TAR_AZ', 'MIN_TAR_EL', 'MAX_TAR_EL', 'AREA', 'TIMELINE',
        'BONUSING', 'AGGREGATN', 'PERIODICIT', 'CALIB_TYPE', 'ACC_CONTRL',     
