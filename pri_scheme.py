@@ -38,10 +38,10 @@ class Priority_Optimizer:
         self.bounds =  [ (x * self.scale, y * self.scale) for x, y in parameters["priority bounds"] ]
         self.average_prioritizations = []
         self.final_optimal_priorities = []
-
+        self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
 
         # Dataframe related variables
-        self.zero_dollar_customer_values = parameters["zero_dollar_cust_dpsqkm"]
+        self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.dollar_breaks = parameters["dollar bin breakpoints"]
         self.weather_scenarios = parameters["number of weather scenarios"]
         self.test_priorities = [x * self.scale for x in parameters["test case priorities"] ]
@@ -55,11 +55,8 @@ class Priority_Optimizer:
 
         # Run initial functions
         self.load_data()
-        self.add_columns()
-        self.create_cloud_cover_buckets()
-        self.populate_actual_cc()
-        self.populate_predicted_cc()
-        self.populate_dollar_values()
+        self.prepare_dataframe()
+
         
     def load_data(self):
         """ Load the csv files into pandas dataframes """
@@ -75,6 +72,19 @@ class Priority_Optimizer:
         self.min_latitude = min(self.active_latitudes)
         self.max_latitude = max(self.active_latitudes)
 
+    def prepare_dataframe(self):
+        """ Create and populate all columns required prior to starting the optimization process """
+
+        self.add_columns()
+        self.create_cloud_cover_buckets()
+        self.populate_actual_cc()
+        self.populate_predicted_cc()
+        self.populate_dollar_values()
+        self.populate_bucket()
+
+        # Create dictionary template for mapping dollar values to priorities 
+        self.dollar_to_pri_map = dict.fromkeys(set(self.active_orders.DollarPerSquare), 0) 
+
     def add_columns(self):
         """ Add/remove the necessary columns and fill with a placeholder value"""
 
@@ -82,6 +92,7 @@ class Priority_Optimizer:
         self.active_orders.drop(labels=["Unnamed: 0"], axis=1, inplace=True)
 
         # Add needed columns
+        self.active_orders["Bucket"] = -1
         self.active_orders["New_Priority"] = 0
         self.active_orders["Score"] = 0
         self.active_orders["Total_Score"] = 0
@@ -129,35 +140,41 @@ class Priority_Optimizer:
         # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
         self.active_orders.loc[self.active_orders.Cust_Num.isin(self.zero_dollar_customer_values.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(self.zero_dollar_customer_values)
 
+    def populate_bucket(self):
+        """ Each order is given a bucket number based on the dollar value of the order """
+
+        def bucketing_function(dollar_value):
+            """ Returns a bucket value given a dollar value """
+            
+            if dollar_value <= self.dollar_breaks[10]: return 0
+            if (dollar_value >  self.dollar_breaks[10]) and (dollar_value <= self.dollar_breaks[9]):  return 1
+            if (dollar_value >  self.dollar_breaks[9]) and (dollar_value <= self.dollar_breaks[8]):  return 2
+            if (dollar_value >  self.dollar_breaks[8]) and (dollar_value <= self.dollar_breaks[7]):  return 3
+            if (dollar_value >  self.dollar_breaks[7]) and (dollar_value <= self.dollar_breaks[6]):  return 4
+            if (dollar_value >  self.dollar_breaks[6]) and (dollar_value <= self.dollar_breaks[5]):  return 5
+            if (dollar_value >  self.dollar_breaks[5]) and (dollar_value <= self.dollar_breaks[4]):  return 6
+            if (dollar_value >  self.dollar_breaks[4]) and (dollar_value <= self.dollar_breaks[3]):  return 7
+            if (dollar_value >  self.dollar_breaks[3]) and (dollar_value <= self.dollar_breaks[2]):  return 8
+            if (dollar_value >  self.dollar_breaks[2]) and (dollar_value <= self.dollar_breaks[1]):  return 9
+            if (dollar_value >  self.dollar_breaks[1]) and (dollar_value <= self.dollar_breaks[0]):  return 10
+            if dollar_value > self.dollar_breaks[0]: return 11
+            
+        self.active_orders.Bucket = self.active_orders.apply( lambda x: bucketing_function(x.DollarPerSquare), axis=1)
+
     def populate_priority(self, priority_list):
         """ Add a priority to each order based on the dollar value (and potentially other factors)"""
 
-        # create a set of all unique dollar values 
-        all_dollar_values = set(self.active_orders.DollarPerSquare)
+        # Create a list of tuples where the tuple elements are (bucket, priority)
+        bucket_priority_list = []
 
-        # create a dictionary for mapping dollar values to priorities 
-        dollar_to_pri_map = dict.fromkeys(all_dollar_values, 0) 
+        for bucket in range(self.number_of_dollar_val_buckets):
+            bucket_priority_list.append((bucket, priority_list[bucket]))
 
-        # change the dict values to the correct (starting) priorities
-        for value in dollar_to_pri_map:
-            if value >  self.dollar_breaks[0]:  dollar_to_pri_map[value] = priority_list[0]
-            if value <= self.dollar_breaks[0]:  dollar_to_pri_map[value] = priority_list[1]
-            if value <  self.dollar_breaks[1]:  dollar_to_pri_map[value] = priority_list[2]
-            if value <  self.dollar_breaks[2]:  dollar_to_pri_map[value] = priority_list[3]
-            if value <  self.dollar_breaks[3]:  dollar_to_pri_map[value] = priority_list[4]
-            if value <  self.dollar_breaks[4]:  dollar_to_pri_map[value] = priority_list[5]
-            if value <  self.dollar_breaks[5]:  dollar_to_pri_map[value] = priority_list[6]
-            if value <  self.dollar_breaks[6]:  dollar_to_pri_map[value] = priority_list[7]
-            if value <  self.dollar_breaks[7]:  dollar_to_pri_map[value] = priority_list[8]
-            if value <  self.dollar_breaks[8]:  dollar_to_pri_map[value] = priority_list[9]
-            if value <  self.dollar_breaks[9]:  dollar_to_pri_map[value] = priority_list[10]
-            if value == self.dollar_breaks[10]: dollar_to_pri_map[value] = priority_list[11]
-
-        # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
-        self.active_orders['New_Priority'] = self.active_orders.DollarPerSquare.map(dollar_to_pri_map)
+        # Create a dictionary using the list of tuples with key/value pairs of bucket/priority
+        bucket_to_pri_map = dict(bucket_priority_list)
         
-        # Scale up from minimize function friendly to actual priority value
-        self.active_orders['New_Priority'] = self.active_orders['New_Priority'] * self.scale
+        # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
+        self.active_orders.New_Priority = self.active_orders.Bucket.map(bucket_to_pri_map)
 
     def priority_to_score(self, priority):
         """ Given a priority will return a score based on the FOM curve"""
@@ -187,14 +204,15 @@ class Priority_Optimizer:
             
             if not order_list.empty:
                 max_index = order_list.Total_Score.idxmax()
-                self.active_orders.iloc[max_index, 8 ] = True
+                self.active_orders.iloc[max_index, 9 ] = True
 
             latitude += 2                                                                                         
     
-    def total_dollars(self):
-        """ Returns the sum of all the dollars per square with a 'Clear' value of True for a given column"""
+    def total_dollars(self, weather_column):
+        """ Returns the sum of all the dollars per square with actual CC value less than the max cc """
 
-        return self.active_orders.DollarPerSquare[self.active_orders.Scheduled == True].sum()
+        return self.active_orders.DollarPerSquare[  (self.active_orders.Scheduled == True) & 
+                                                    (self.active_orders.MAX_CC > self.active_orders["Actual_" + str(weather_column)])].sum()
 
     def run_scenario(self, weather_column):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
@@ -206,7 +224,7 @@ class Priority_Optimizer:
         self.populate_total_score(weather_column)
         self.schedule_orders()
 
-        return self.total_dollars()
+        return self.total_dollars(weather_column)
 
     def run_priority_scheme(self, priority_scheme, weather_column):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
@@ -228,26 +246,9 @@ class Priority_Optimizer:
                           method=self.optimization_method)
 
         if result.success:
-            return result.x
+            return result
         else:
             raise ValueError(result.message)
-        
-    def run_clear_scenarios(self):
-        """ This will run the optimization function for each clear scenario for the current weather scenario """
-
-
-
-        prioritizations = []
-
-        for clear_column in range(self.clear_columns):
-            prioritization = self.optimal_priorities(clear_column)
-            prioritizations.append(prioritization)
-
-        average_prioritization = [sum(x)/len(x) for x in zip(*prioritizations)]
-
-
-
-        return average_prioritization
 
     def run_weather_scenarios(self):
         """ This will run the 'run clear scenarios' function for multiple weather scenarios and return an average prioritization from the results"""
@@ -259,10 +260,11 @@ class Priority_Optimizer:
             # Timing 
             start_time = time()
 
-            prioritization = self.optimal_priorities(weather_column)
-            prioritizations.append(prioritization)
+            optimization_result = self.optimal_priorities(weather_column)
+            prioritizations.append(optimization_result.x)
 
-            print("Prioritization: ", prioritization)
+            print("Prioritization: ", optimization_result.x)
+            print("Resulting $ value: ", optimization_result.fun)
             print("-----------------------------------------")
 
             # Timing 
@@ -271,13 +273,19 @@ class Priority_Optimizer:
             print("----------------------------------------------------------------")
 
         # Save the average of the prioritization sets found as the final result
-        self.final_optimal_priorities = [sum(x)/len(x) for x in zip(*prioritizations)]
+        self.final_optimal_priorities = [(sum(x)/len(x)) / self.scale for x in zip(*prioritizations)]
 
-    def run_test_cases(self):
-        """ Will run the priority_scheme function for each test case priority set """
+    def run_test_case(self):
+        """ Will run the priority_scheme function for the test case priority set """
 
-        for scheme in test_cases:
-            self.run_priority_scheme(scheme)
+        total_dollars_for_each_weather_scenario = []
+
+        for weather_column in range(self.weather_scenarios):
+            # Produce a total dollar value for a given weather scenario (column) and append to a list
+            total_dollars_for_each_weather_scenario.append(self.run_priority_scheme(self.test_priorities, weather_column))
+
+        # Return the average total dollar value
+        return sum(total_dollars_for_each_weather_scenario)/len(total_dollars_for_each_weather_scenario)
 
     def display_results(self):
         """ Will print the resulting optimal priority set as well as display a graph of the same """
@@ -293,9 +301,10 @@ if __name__ == "__main__":
     
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
-    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
     priority_optimizer.run_weather_scenarios()
     priority_optimizer.display_results()
+    # print(priority_optimizer.run_test_case())
+    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
 
 
 
@@ -305,10 +314,10 @@ if __name__ == "__main__":
 # Ideas
 """
 - Make the curve easy to change
-- Make the dollar value bins easy to change
++ Make the dollar value bins easy to change
 - Vet the current output and investigate
-- Make easy to submit a specific pri scheme
++ Make easy to submit a specific pri scheme
 - Make easy to change the number of pri bins
 + Allow to accept a JSON file with all the necessary info
-- Add in the cc tolerance to each order and factor into clear result
++ Add in the cc tolerance to each order and factor into clear result
 """
