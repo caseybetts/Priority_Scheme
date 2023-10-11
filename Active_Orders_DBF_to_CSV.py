@@ -50,18 +50,18 @@ def dataframe_to_csv(dataframe):
 
     dataframe.to_csv('active_orders.csv')
 
-def run_all():
-    """ Use the helper functions to create a usable dataframe for msof orders"""
-
-    msof_df = load_dbf_to_dataframe()
-    cleaned_df = clean_msof_df(msof_df)
-    
-    dataframe_to_csv(cleaned_df)
 
 
 if __name__ == "__main__":
 
-    run_all()
+    # Load in the .dbf to a pandas dataframe
+    msof_df = load_dbf_to_dataframe()
+
+    # Clean the dataframe 
+    cleaned_df = clean_msof_df(msof_df)
+    
+    # Save dataframe to a .csv file
+    dataframe_to_csv(cleaned_df)
 
 
 

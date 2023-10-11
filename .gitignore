@@ -1,10 +1,12 @@
 # Repository files
 /Rev11413*
 /Testing*
+/PWOT*
 multisensor_active_orders_ufp.*
 cloudcover.csv
 output_from_pri_scheme.csv
 active_orders.csv
+
 
 
 # Byte-compiled / optimized / DLL files
