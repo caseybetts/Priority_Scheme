@@ -42,6 +42,7 @@ class Priority_Optimizer:
 
         # Dataframe related variables
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
+        self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
         self.dollar_breaks = parameters["dollar bin breakpoints"]
         self.weather_scenarios = parameters["number of weather scenarios"]
         self.test_priorities = [x * self.scale for x in parameters["test case priorities"] ]
@@ -108,6 +109,7 @@ class Priority_Optimizer:
     
     def populate_actual_cc(self):
         """ Choose an actual cloud cover score for each order """
+        print("weather scenarios: ", self.weather_scenarios)
         
         # Create list of column names
         for column_number in range(self.weather_scenarios):
@@ -123,15 +125,7 @@ class Priority_Optimizer:
             self.active_orders["Predicted_" + str(column_number)] = self.active_orders.apply( lambda x: x["Actual_" + str(column_number)] + (random() - .5) * self.predicted_cc_uncertainty, axis=1 )
 
             # predicted cc must be between 0 and 1
-            self.active_orders["Predicted_" + str(column_number)].clip(lower=0, upper=1, inplace=True)
-
-    def set_clear_orders(self):
-        """ Randomly create and populate clear columns with True based on their predicted CC and CC tolerance"""
-
-        for i in range(self.clear_columns):
-            self.active_orders[i] = self.active_orders.apply(   lambda x: True
-                                                                if x.Actual_CC > x.MAX_CC 
-                                                                else False, axis=1)     
+            self.active_orders["Predicted_" + str(column_number)].clip(lower=0, upper=1, inplace=True) 
         
     def populate_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
@@ -139,6 +133,10 @@ class Priority_Optimizer:
         # Use .loc to locate all orders with a customer in the zero dollar dictionary
         # Then set the dollar value equal to the corresponding value in the dictionary using the pandas mapping function based on the customer number
         self.active_orders.loc[self.active_orders.Cust_Num.isin(self.zero_dollar_customer_values.keys()), 'DollarPerSquare'] = self.active_orders.Cust_Num.map(self.zero_dollar_customer_values)
+
+        # There is a very large number of cust 306 orders so changing these based on priority will provide a much better model
+        # For cust 306 change the dollar value based on priority using the MCP dollar mapping
+        self.active_orders.loc[self.active_orders.Cust_Num == 306, 'DollarPerSquare'] = self.active_orders.Task_Pri.map(self.MCP_priority_to_dollar_map) 
 
     def populate_bucket(self):
         """ Each order is given a bucket number based on the dollar value of the order """
@@ -162,13 +160,13 @@ class Priority_Optimizer:
         self.active_orders.Bucket = self.active_orders.apply( lambda x: bucketing_function(x.DollarPerSquare), axis=1)
 
     def populate_priority(self, priority_list):
-        """ Add a priority to each order based on the dollar value (and potentially other factors)"""
+        """ Add a priority to each order based on the value bucket"""
 
         # Create a list of tuples where the tuple elements are (bucket, priority)
         bucket_priority_list = []
 
         for bucket in range(self.number_of_dollar_val_buckets):
-            bucket_priority_list.append((bucket, priority_list[bucket]))
+            bucket_priority_list.append((bucket, priority_list[-bucket]))
 
         # Create a dictionary using the list of tuples with key/value pairs of bucket/priority
         bucket_to_pri_map = dict(bucket_priority_list)
@@ -186,7 +184,7 @@ class Priority_Optimizer:
         """ populate a score to each order based on the priority of the order """
 
         # Set the score
-        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority)-700), axis=1)
+        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority / self.scale)-700), axis=1)
 
     def populate_total_score(self, weather_column):
         """ Populate a column for total score which is the score multiplied by the predicted cloud cover """
@@ -233,7 +231,9 @@ class Priority_Optimizer:
         self.populate_priority(priority_scheme)
         self.populate_score()
 
-        return -self.run_scenario(weather_column)
+        total = self.run_scenario(weather_column)
+        
+        return - total
     
     def optimal_priorities(self, weather_column):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
@@ -263,8 +263,8 @@ class Priority_Optimizer:
             optimization_result = self.optimal_priorities(weather_column)
             prioritizations.append(optimization_result.x)
 
-            print("Prioritization: ", optimization_result.x)
-            print("Resulting $ value: ", optimization_result.fun)
+            print("Prioritization: ", optimization_result.x / self.scale)
+            print("Resulting $ value: ", -optimization_result.fun)
             print("-----------------------------------------")
 
             # Timing 
@@ -302,9 +302,9 @@ if __name__ == "__main__":
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
     priority_optimizer.run_weather_scenarios()
-    priority_optimizer.display_results()
     # print(priority_optimizer.run_test_case())
     priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
+    priority_optimizer.display_results()
 
 
 

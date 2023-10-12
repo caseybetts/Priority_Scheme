@@ -8,7 +8,7 @@
         "331": 10,
         "361": 3,
         "366": 4,
-        "381": 2,
+        "381": 3.5,
         "10250": 15,
         "12620": 14,
         "12711": 14,
@@ -20,22 +20,33 @@
         "60603": 5,
         "100069": 4
     },
+    "MCP_dollar_values": {
+        "698": 70,
+        "708": 60,
+        "718": 50,
+        "738": 40,
+        "748": 30,
+        "758": 30,
+        "768": 30,
+        "778": 30,
+        "788": 30
+    },
     "initial priorities": [
-        710,
-        752,
-        755,
-        757,
-        768,
-        768,
-        768,
-        769,
-        791,
-        780,
-        790,
-        799
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750,
+        750
     ],
     "test case priorities": [
-        710,
+        730,
         752,
         755,
         757,
@@ -44,9 +55,9 @@
         768,
         769,
         791,
-        780,
-        790,
-        799
+        765,
+        757,
+        781
     ],
     "priority bounds": [
         [
@@ -98,7 +109,7 @@
             800
         ]
     ],
-    "number of weather scenarios": 10,
+    "number of weather scenarios": 5,
     "dollar bin breakpoints": [
         20,
         15,
@@ -114,5 +125,5 @@
     ],
     "optimization method": "Nelder-Mead",
     "optimization tolerance": 0.01,
-    "predicted cloud cover uncertainty": 0.2
+    "predicted cloud cover uncertainty": 0.1
 }
