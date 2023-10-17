@@ -1,0 +1,67 @@
+# Author: Casey Betts, 2023
+# The purpose of this file is to convert a PWOT geotiff file to a CSV with the latitude/longitude associated to each pixel
+
+import rasterio
+import numpy as np
+import pandas as pd
+
+PWOT_filename = 'PWOT\PWOT_20231007T103000000Z.tif'
+orders_filename = 'active_orders.csv'
+
+def PWOT_dataframe(PWOT_filename):
+    """ Returns a dataframe of the raster values with their associated latitudes and longitudes"""
+
+    with rasterio.open(PWOT_filename) as dataset:
+        band = dataset.read(1)
+
+        # PWOT files extend to the full globe
+        lat_min = -90
+        lat_max = 90
+        lon_min = -180
+        lon_max = 180  
+
+        # Each pixel has height and width of a quarter degree
+        step = 0.25
+
+        # Calculate the number of rows and columns in the image
+        rows = int((lat_max - lat_min) / step) 
+        cols = int((lon_max - lon_min) / step)
+
+        # Create lists of each latitude and longitude in the file
+        lats = [lat_max - step * i for i in range(rows)]
+        lons = [lon_min + step * j for j in range(cols)]
+        
+        # Create dataframe with values, latitude and longitude
+        df = pd.DataFrame({'Value': band.flatten(),
+                        'Latitude': np.repeat(lats, cols),
+                        'Longitude': np.tile(lons, rows)})
+            
+    return df
+
+def trim_PWOT_dataframe(dataframe):
+    """ Remove PWOT values that do not intersect the longitudes of the active orders """
+
+    with open(orders_filename) as f:
+        orders = pd.read_csv(f)
+
+    active_longitudes = set(orders.Longitude)
+    longitudes = []
+
+    for i in active_longitudes:
+        longitudes.append(i + .25)
+        longitudes.append(i + .5)
+        longitudes.append(i + .75)
+        longitudes.append(float(i))
+
+    return dataframe[dataframe.Longitude.isin(longitudes)]
+
+def dataframe_to_csv(dataframe, filename):
+    # Save the dataframe to a .csv file
+    dataframe.to_csv(filename)
+
+
+if __name__ == "__main__":
+
+    dataframe_to_csv(trim_PWOT_dataframe(PWOT_dataframe(PWOT_filename)),
+                     'PWOT_20231007T103000000Z_Trimmed.csv')
+

@@ -202,7 +202,7 @@ class Priority_Optimizer:
             
             if not order_list.empty:
                 max_index = order_list.Total_Score.idxmax()
-                self.active_orders.iloc[max_index, 9 ] = True
+                self.active_orders.iloc[max_index, 10 ] = True
 
             latitude += 2                                                                                         
     
@@ -314,10 +314,8 @@ if __name__ == "__main__":
 # Ideas
 """
 - Make the curve easy to change
-+ Make the dollar value bins easy to change
 - Vet the current output and investigate
-+ Make easy to submit a specific pri scheme
 - Make easy to change the number of pri bins
-+ Allow to accept a JSON file with all the necessary info
-+ Add in the cc tolerance to each order and factor into clear result
+
+- Use PWOT weather file for weather data
 """
