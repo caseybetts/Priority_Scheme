@@ -1,6 +1,6 @@
 {
     "orders_csv": "active_orders.csv",
-    "clouds_csv": "cloudcover.csv",
+    "clouds_csv": "PWOT_20231007T103000000Z_Trimmed.csv",
     "zero_dollar_cust_dpsqkm": {
         "82": 1,
         "306": 2,
@@ -21,15 +21,15 @@
         "100069": 4
     },
     "MCP_dollar_values": {
-        "698": 70,
-        "708": 60,
-        "718": 50,
-        "738": 40,
-        "748": 30,
-        "758": 30,
-        "768": 30,
-        "778": 30,
-        "788": 30
+        "698": 7,
+        "708": 6,
+        "718": 5,
+        "738": 4,
+        "748": 2.5,
+        "758": 2,
+        "768": 1.5,
+        "778": 1.3,
+        "788": 1
     },
     "initial priorities": [
         750,
@@ -109,7 +109,7 @@
             800
         ]
     ],
-    "number of weather scenarios": 5,
+    "number of weather scenarios": 1,
     "dollar bin breakpoints": [
         20,
         15,
