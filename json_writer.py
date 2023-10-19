@@ -5,7 +5,7 @@ import json
 
 data = {
     "orders_csv" : "active_orders.csv",
-    "clouds_csv" : "PWOT_20231007T103000000Z_Trimmed.csv",
+    "clouds_folder" : "PWOT",
     "zero_dollar_cust_dpsqkm" : {   82: 1, 
                                     306: 2,
                                     326: 2, 

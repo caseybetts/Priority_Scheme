@@ -4,7 +4,8 @@
 import rasterio
 import numpy as np
 import pandas as pd
-import math
+
+from os import listdir
 
 PWOT_filename = 'PWOT\PWOT_20231007T103000000Z.tif'
 orders_filename = 'active_orders.csv'
@@ -60,6 +61,9 @@ def dataframe_to_csv(dataframe, filename):
 
 if __name__ == "__main__":
 
-    dataframe_to_csv(trim_PWOT_dataframe(PWOT_dataframe(PWOT_filename)),
-                     'PWOT_20231007T103000000Z_Trimmed.csv')
+    cloud_file_names = [x for x in listdir('PWOT') if x[-1] == "f"]
 
+    for file in cloud_file_names:
+        dataframe_to_csv(trim_PWOT_dataframe(PWOT_dataframe('PWOT\\'+ file)),
+                     'PWOT_CSV\\'+ file[5:18])
+    

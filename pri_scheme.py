@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from math import exp
-from random import choice, random
+from os import listdir
+from random import random
 from scipy.optimize import minimize
 from sys import argv 
 from time import time
@@ -28,7 +29,7 @@ class Priority_Optimizer:
 
         # File locations
         self.active_orders_location = parameters["orders_csv"]
-        self.cloud_cover_values_location = parameters["clouds_csv"]
+        self.cloud_cover_folder = parameters["clouds_folder"]
 
         # Optimization related variables
         self.scale = 1e-5
@@ -41,6 +42,7 @@ class Priority_Optimizer:
         self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
 
         # Dataframe related variables
+        self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
         self.dollar_breaks = parameters["dollar bin breakpoints"]
@@ -64,7 +66,6 @@ class Priority_Optimizer:
 
         # Load orders and image strips .csv files into pandas dataframes
         self.active_orders = pd.read_csv(self.active_orders_location)
-        self.cloud_cover = pd.read_csv(self.cloud_cover_values_location)
 
         # Create variable to contain the latitudes that have orders in them
         self.active_latitudes = set(self.active_orders.Latitude)
@@ -78,9 +79,6 @@ class Priority_Optimizer:
 
         self.add_columns()
         self.populate_actual_cc()
-        # print(self.cloud_cover.head())
-        # print(type(self.cloud_cover[(self.cloud_cover.Latitude == 40.25) & (self.cloud_cover.Longitude == 124.25)].Value))
-        # print(self.cloud_cover[(self.cloud_cover.Latitude == 40.25) & (self.cloud_cover.Longitude == 124.25)].Value.iloc[0])
         self.populate_predicted_cc()
         self.populate_dollar_values()
         self.populate_bucket()
@@ -100,14 +98,6 @@ class Priority_Optimizer:
         self.active_orders["Score"] = 0
         self.active_orders["Total_Score"] = 0
         self.active_orders["Scheduled"] = False 
-    
-    # def create_cloud_cover_buckets(self):
-        """ Populates a dictionary where the keys are each active latitude and the values are lists of possible cloud cover values """
-
-        # for latitude in self.active_latitudes:
-        #     self.cloud_cover_buckets[latitude] = list(self.cloud_cover_values[
-        #                                         (self.cloud_cover_values.Latitude < latitude + 2) & 
-        #                                         (self.cloud_cover_values.Latitude > latitude - 2)].CC)
             
     def find_cloud_cover(self, lat, lon):
         """ Given a latitude and longitude this will return the nearest cloud cover value from the PWOT .csv """
@@ -117,6 +107,7 @@ class Priority_Optimizer:
         lon = round(lon * 4) / 4
 
         try:
+            # return the single cloud cover value associated with the given lat and lon 
             return self.cloud_cover[(self.cloud_cover.Latitude == lat) & (self.cloud_cover.Longitude == lon)].Value.iloc[0]
         except:
             print("Lat: ", lat, "Lon: ", lon)
@@ -127,6 +118,12 @@ class Priority_Optimizer:
         
         # Create acutal cloud value columns
         for column_number in range(self.weather_scenarios):
+            print(column_number)
+
+            # Load the current PWOT .csv into the cloud cover dataframe
+            self.cloud_cover = pd.read_csv('PWOT_CSV\\'+self.cloud_file_names[column_number])
+
+            # Create a column with the current number in the name and populate with the appropriate cloud cover value for each order based on the cloud cover dataframe
             self.active_orders["Actual_" + str(column_number)] = self.active_orders.apply( lambda x: self.find_cloud_cover(x.Latitude, x.Longitude), axis=1)
 
     def populate_predicted_cc(self):
@@ -216,7 +213,6 @@ class Priority_Optimizer:
             # Create the list of orders within the current latitude band
             order_list = self.active_orders[(self.active_orders.Latitude > latitude) & (self.active_orders.Latitude < latitude + 1)]
             
-
             if not order_list.empty:
                 max_index = order_list.Total_Score.idxmax()
                 self.active_orders.iloc[max_index, 10 ] = True

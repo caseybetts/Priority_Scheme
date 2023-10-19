@@ -1,6 +1,6 @@
 {
     "orders_csv": "active_orders.csv",
-    "clouds_csv": "PWOT_20231007T103000000Z_Trimmed.csv",
+    "clouds_folder": "PWOT_CSV",
     "zero_dollar_cust_dpsqkm": {
         "82": 1,
         "306": 2,
@@ -109,7 +109,7 @@
             800
         ]
     ],
-    "number of weather scenarios": 1,
+    "number of weather scenarios": 5,
     "dollar bin breakpoints": [
         20,
         15,
