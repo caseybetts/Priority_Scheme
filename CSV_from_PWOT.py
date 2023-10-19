@@ -4,6 +4,7 @@
 import rasterio
 import numpy as np
 import pandas as pd
+import math
 
 PWOT_filename = 'PWOT\PWOT_20231007T103000000Z.tif'
 orders_filename = 'active_orders.csv'
@@ -41,19 +42,16 @@ def PWOT_dataframe(PWOT_filename):
 def trim_PWOT_dataframe(dataframe):
     """ Remove PWOT values that do not intersect the longitudes of the active orders """
 
+    # Open the .csv containing all the orders
     with open(orders_filename) as f:
         orders = pd.read_csv(f)
 
+    
     active_longitudes = set(orders.Longitude)
-    longitudes = []
+    max_longitude = max(active_longitudes) + 1
+    min_longitude = min(active_longitudes) - 1
 
-    for i in active_longitudes:
-        longitudes.append(i + .25)
-        longitudes.append(i + .5)
-        longitudes.append(i + .75)
-        longitudes.append(float(i))
-
-    return dataframe[dataframe.Longitude.isin(longitudes)]
+    return dataframe[(dataframe.Longitude > min_longitude) & (dataframe.Longitude < max_longitude)]
 
 def dataframe_to_csv(dataframe, filename):
     # Save the dataframe to a .csv file
