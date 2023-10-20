@@ -109,7 +109,7 @@
             800
         ]
     ],
-    "number of weather scenarios": 5,
+    "number of weather scenarios": 1,
     "dollar bin breakpoints": [
         20,
         15,
@@ -125,5 +125,5 @@
     ],
     "optimization method": "Nelder-Mead",
     "optimization tolerance": 0.01,
-    "predicted cloud cover uncertainty": 0.1
+    "predicted cloud cover uncertainty": 0.3
 }

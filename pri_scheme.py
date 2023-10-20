@@ -8,14 +8,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from math import exp
+from numpy import random
 from os import listdir
-from random import random
 from scipy.optimize import minimize
 from sys import argv 
 from time import time
 
 # Applicable json file name with parameters
 input_parameters_file_name = argv[1]
+
+# Initialize the random number generator
+rng = random.default_rng()
 
 # Reads in the 
 with open(input_parameters_file_name, 'r') as input:
@@ -43,12 +46,13 @@ class Priority_Optimizer:
 
         # Dataframe related variables
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
+        print(self.cloud_file_names)
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
         self.dollar_breaks = parameters["dollar bin breakpoints"]
         self.weather_scenarios = parameters["number of weather scenarios"]
         self.test_priorities = [x * self.scale for x in parameters["test case priorities"] ]
-        self.predicted_cc_uncertainty = parameters["predicted cloud cover uncertainty"] * 2
+        self.predicted_cc_uncertainty = parameters["predicted cloud cover uncertainty"] * 2                     # Standard Deviation of the normal distribution  
         self.cloud_cover_buckets = {}
 
         # Score Curve Variables
@@ -121,10 +125,10 @@ class Priority_Optimizer:
             print(column_number)
 
             # Load the current PWOT .csv into the cloud cover dataframe
-            self.cloud_cover = pd.read_csv('PWOT_CSV\\'+self.cloud_file_names[column_number])
+            self.cloud_cover = pd.read_csv('PWOT_CSV\\'+ self.cloud_file_names[column_number])
 
             # Create a column with the current number in the name and populate with the appropriate cloud cover value for each order based on the cloud cover dataframe
-            self.active_orders["Actual_" + str(column_number)] = self.active_orders.apply( lambda x: self.find_cloud_cover(x.Latitude, x.Longitude), axis=1)
+            self.active_orders["Actual_" + str(column_number)] = self.active_orders.apply( lambda x: self.find_cloud_cover(x.Latitude, x.Longitude)/100, axis=1)
 
     def populate_predicted_cc(self):
         """ Populate the predicted cc column with an estimated amount of cloud cover based on the actual cc """
@@ -133,7 +137,7 @@ class Priority_Optimizer:
         for column_number in range(self.weather_scenarios):
 
             # predicted cc is a random variation (+/- uncertanty) of the actual cc
-            self.active_orders["Predicted_" + str(column_number)] = self.active_orders.apply( lambda x: x["Actual_" + str(column_number)] + (random() - .5) * self.predicted_cc_uncertainty, axis=1 )
+            self.active_orders["Predicted_" + str(column_number)] = self.active_orders.apply( lambda x: x["Actual_" + str(column_number)] + (rng.standard_normal() * self.predicted_cc_uncertainty), axis=1 )
 
             # predicted cc must be between 0 and 1
             self.active_orders["Predicted_" + str(column_number)].clip(lower=0, upper=1, inplace=True) 
@@ -323,14 +327,13 @@ if __name__ == "__main__":
 
 
 
-
 # Ideas
 """
 - Make the curve easy to change
 - Vet the current output and investigate
 - Make easy to change the number of pri bins
 
-- Use PWOT weather file for weather data
-    - Create a trimmed PWOT .csv file
-    - Use PWOT to assign cc value to each order 
++ Use PWOT weather file for weather data
+    + Create a trimmed PWOT .csv file
+    + Use PWOT to assign cc value to each order 
 """

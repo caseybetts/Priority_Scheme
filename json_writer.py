@@ -1,11 +1,22 @@
 # This file will create a .json file out of the given python dict
 
+""" Note:   a predicted cloud cover uncertainty (standard deviation) of .30 will produce the following distribution 
+            of the difference bewteen the predicted cc and the actual cc.
+    
+            Actual vs Predicted difference with .30 standard deviation:
+            < .20 (Good):       58%	
+            < .40 (Fair):       74%	
+            < .60 (Bad):        85%	
+            < .80 (Terrible):   92% 
+"""
+
+
 import json
 
 
 data = {
     "orders_csv" : "active_orders.csv",
-    "clouds_folder" : "PWOT",
+    "clouds_folder" : "PWOT_CSV",
     "zero_dollar_cust_dpsqkm" : {   82: 1, 
                                     306: 2,
                                     326: 2, 
@@ -79,7 +90,7 @@ data = {
     "dollar bin breakpoints" : [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0],
     "optimization method" : 'Nelder-Mead',
     "optimization tolerance" : .01,
-    "predicted cloud cover uncertainty" : .1
+    "predicted cloud cover uncertainty" : .3            # See note above
 
 }
 
