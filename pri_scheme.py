@@ -38,20 +38,19 @@ class Priority_Optimizer:
         self.scale = 1e-5
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.initial_priorities = [x * self.scale for x in parameters["initial priorities"] ]
-        self.bounds =  [ (x * self.scale, y * self.scale) for x, y in parameters["priority bounds"] ]
+        self.initial_priorities = parameters["initial priorities"]
+        self.bounds = parameters["priority bounds"]
         self.average_prioritizations = []
         self.final_optimal_priorities = []
         self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
 
         # Dataframe related variables
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
-        print(self.cloud_file_names)
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
         self.dollar_breaks = parameters["dollar bin breakpoints"]
         self.weather_scenarios = parameters["number of weather scenarios"]
-        self.test_priorities = [x * self.scale for x in parameters["test case priorities"] ]
+        self.test_priorities = parameters["test case priorities"]
         self.predicted_cc_uncertainty = parameters["predicted cloud cover uncertainty"] * 2                     # Standard Deviation of the normal distribution  
         self.cloud_cover_buckets = {}
 
@@ -118,7 +117,7 @@ class Priority_Optimizer:
     
     def populate_actual_cc(self):
         """ Choose an actual cloud cover score for each order """
-        print("weather scenarios: ", self.weather_scenarios)
+        print("Running ", self.weather_scenarios," weather scenarios")
         
         # Create acutal cloud value columns
         for column_number in range(self.weather_scenarios):
@@ -199,7 +198,7 @@ class Priority_Optimizer:
         """ populate a score to each order based on the priority of the order """
 
         # Set the score
-        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority / self.scale)-700), axis=1)
+        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority)-700), axis=1)
 
     def populate_total_score(self, weather_column):
         """ Populate a column for total score which is the score multiplied by the predicted cloud cover """
@@ -245,7 +244,7 @@ class Priority_Optimizer:
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
 
         # Apply the given priority values to the orders
-        self.populate_priority(priority_scheme)
+        self.populate_priority(priority_scheme / self.scale)
         self.populate_score()
 
         total = self.run_scenario(weather_column)
@@ -255,10 +254,14 @@ class Priority_Optimizer:
     def optimal_priorities(self, weather_column):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
 
+        scaled_bounds = [ (x * self.scale, y * self.scale) for x, y in self.bounds ]
+        scaled_initial_priorities = [x * self.scale for x in self.initial_priorities ]
+
+
         result = minimize(self.run_priority_scheme, 
-                          self.initial_priorities, 
+                          scaled_initial_priorities, 
                           args=weather_column, 
-                          bounds=self.bounds, 
+                          bounds=scaled_bounds, 
                           tol=self.optimization_tolerance, 
                           method=self.optimization_method)
 
@@ -278,9 +281,9 @@ class Priority_Optimizer:
             start_time = time()
 
             optimization_result = self.optimal_priorities(weather_column)
-            prioritizations.append(optimization_result.x)
+            prioritizations.append([x / self.scale for x in optimization_result.x])
 
-            print("Prioritization: ", optimization_result.x / self.scale)
+            print("Prioritization: ", prioritizations[-1])
             print("Resulting $ value: ", -optimization_result.fun)
             print("-----------------------------------------")
 
@@ -290,7 +293,7 @@ class Priority_Optimizer:
             print("----------------------------------------------------------------")
 
         # Save the average of the prioritization sets found as the final result
-        self.final_optimal_priorities = [(sum(x)/len(x)) / self.scale for x in zip(*prioritizations)]
+        self.final_optimal_priorities = [(sum(x)/len(x)) for x in zip(*prioritizations)]
 
     def run_test_case(self):
         """ Will run the priority_scheme function for the test case priority set """
@@ -335,5 +338,10 @@ if __name__ == "__main__":
 
 + Use PWOT weather file for weather data
     + Create a trimmed PWOT .csv file
-    + Use PWOT to assign cc value to each order 
+    + Use PWOT to assign cc value to each order
+
++ Contain the use of self.scale to only values entering and exiting the optimizer function
+- Create a Readout function prior to running the scenarios
+- Add an Average readout to each optimizer run
+- Add all prioritiztions to the resulting graph in gray and the average in red
 """

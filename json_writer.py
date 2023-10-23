@@ -1,6 +1,6 @@
 # This file will create a .json file out of the given python dict
 
-""" Note:   a predicted cloud cover uncertainty (standard deviation) of .30 will produce the following distribution 
+""" Note:   A predicted cloud cover uncertainty (standard deviation) of .30 will produce the following distribution 
             of the difference bewteen the predicted cc and the actual cc.
     
             Actual vs Predicted difference with .30 standard deviation:
@@ -21,19 +21,19 @@ data = {
                                     306: 2,
                                     326: 2, 
                                     331: 10, 
-                                    361: 3, 
+                                    361: 5, 
                                     366: 4,
-                                    381: 3.5,
+                                    381: 3,
                                     10250: 15, 
                                     12620: 14, 
                                     12711: 14, 
                                     20583: 20,
                                     35915: 11, 
-                                    44924: 4,
+                                    44924: 7,
                                     58480: 13,
                                     60569: 10,
-                                    60603: 5, 
-                                    100069: 4},
+                                    60603: 9, 
+                                    100069: 8},
     
     "MCP_dollar_values": {
         698: 7,
