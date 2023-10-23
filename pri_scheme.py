@@ -43,6 +43,7 @@ class Priority_Optimizer:
         self.average_prioritizations = []
         self.final_optimal_priorities = []
         self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
+        self.pri_scheme_total_dollars = []
 
         # Dataframe related variables
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
@@ -121,7 +122,6 @@ class Priority_Optimizer:
         
         # Create acutal cloud value columns
         for column_number in range(self.weather_scenarios):
-            print(column_number)
 
             # Load the current PWOT .csv into the cloud cover dataframe
             self.cloud_cover = pd.read_csv('PWOT_CSV\\'+ self.cloud_file_names[column_number])
@@ -225,8 +225,12 @@ class Priority_Optimizer:
     def total_dollars(self, weather_column):
         """ Returns the sum of all the dollars per square with actual CC value less than the max cc """
 
-        return self.active_orders.DollarPerSquare[  (self.active_orders.Scheduled == True) & 
+        total_dollars = self.active_orders.DollarPerSquare[  (self.active_orders.Scheduled == True) & 
                                                     (self.active_orders.MAX_CC > self.active_orders["Actual_" + str(weather_column)])].sum()
+        
+        self.pri_scheme_total_dollars.append(total_dollars)
+
+        return total_dollars
 
     def run_scenario(self, weather_column):
         """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
@@ -244,7 +248,7 @@ class Priority_Optimizer:
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
 
         # Apply the given priority values to the orders
-        self.populate_priority(priority_scheme / self.scale)
+        self.populate_priority(priority_scheme)
         self.populate_score()
 
         total = self.run_scenario(weather_column)
@@ -254,13 +258,13 @@ class Priority_Optimizer:
     def optimal_priorities(self, weather_column):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
 
-        scaled_bounds = [ (x * self.scale, y * self.scale) for x, y in self.bounds ]
+        scaled_bounds = [ (x * self.scale, y * self.scale) for x, y in self.bounds ]        # Note: Can't be used with BFGS method (bounds=scaled_bounds,)
         scaled_initial_priorities = [x * self.scale for x in self.initial_priorities ]
 
 
         result = minimize(self.run_priority_scheme, 
                           scaled_initial_priorities, 
-                          args=weather_column, 
+                          args=weather_column,
                           bounds=scaled_bounds, 
                           tol=self.optimization_tolerance, 
                           method=self.optimization_method)
@@ -280,17 +284,22 @@ class Priority_Optimizer:
             # Timing 
             start_time = time()
 
+            # Reset the list of total dollar values
+            self.pri_scheme_total_dollars = []
+
             optimization_result = self.optimal_priorities(weather_column)
             prioritizations.append([x / self.scale for x in optimization_result.x])
 
-            print("Prioritization: ", prioritizations[-1])
-            print("Resulting $ value: ", -optimization_result.fun)
-            print("-----------------------------------------")
-
-            # Timing 
+            # Timing and readout
             end_time = time()
+            print("\n----------------------------------------------------------------")
             print("Time elapsed for a weather scenario: ", end_time - start_time)
+            print("Prioritization: ", prioritizations[-1])
+            print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
+            print("Resulting $ value: $", -optimization_result.fun)
             print("----------------------------------------------------------------")
+
+
 
         # Save the average of the prioritization sets found as the final result
         self.final_optimal_priorities = [(sum(x)/len(x)) for x in zip(*prioritizations)]
@@ -310,7 +319,7 @@ class Priority_Optimizer:
     def display_results(self):
         """ Will print the resulting optimal priority set as well as display a graph of the same """
 
-        print("The final prioritization is: ", self.final_optimal_priorities)
+        print("\n\nThe final prioritization is: ", self.final_optimal_priorities)
 
         x_axis = [30] + self.dollar_breaks
         plt.plot(x_axis, self.final_optimal_priorities, 'o-r')
@@ -342,6 +351,6 @@ if __name__ == "__main__":
 
 + Contain the use of self.scale to only values entering and exiting the optimizer function
 - Create a Readout function prior to running the scenarios
-- Add an Average readout to each optimizer run
++ Add an Average readout to each optimizer run
 - Add all prioritiztions to the resulting graph in gray and the average in red
 """
