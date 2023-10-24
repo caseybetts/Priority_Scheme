@@ -44,6 +44,7 @@ class Priority_Optimizer:
         self.final_optimal_priorities = []
         self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
         self.pri_scheme_total_dollars = []
+        self.prioritizations = []
 
         # Dataframe related variables
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
@@ -288,21 +289,22 @@ class Priority_Optimizer:
             self.pri_scheme_total_dollars = []
 
             optimization_result = self.optimal_priorities(weather_column)
-            prioritizations.append([x / self.scale for x in optimization_result.x])
+            self.prioritizations.append([x / self.scale for x in optimization_result.x])
 
             # Timing and readout
             end_time = time()
             print("\n----------------------------------------------------------------")
             print("Time elapsed for a weather scenario: ", end_time - start_time)
-            print("Prioritization: ", prioritizations[-1])
+            print("Prioritization: ", self.prioritizations[-1])
             print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
-            print("Resulting $ value: $", -optimization_result.fun)
+            print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
+            print("Final $ value: $", -optimization_result.fun)
             print("----------------------------------------------------------------")
 
 
 
         # Save the average of the prioritization sets found as the final result
-        self.final_optimal_priorities = [(sum(x)/len(x)) for x in zip(*prioritizations)]
+        self.final_optimal_priorities = [(sum(x)/len(x)) for x in zip(*self.prioritizations)]
 
     def run_test_case(self):
         """ Will run the priority_scheme function for the test case priority set """
@@ -322,6 +324,10 @@ class Priority_Optimizer:
         print("\n\nThe final prioritization is: ", self.final_optimal_priorities)
 
         x_axis = [30] + self.dollar_breaks
+
+        for prioritiztion in self.prioritizations:
+            plt.plot(x_axis, prioritiztion, color='lavender', linestyle='solid')
+
         plt.plot(x_axis, self.final_optimal_priorities, 'o-r')
         plt.show()
 
@@ -352,5 +358,5 @@ if __name__ == "__main__":
 + Contain the use of self.scale to only values entering and exiting the optimizer function
 - Create a Readout function prior to running the scenarios
 + Add an Average readout to each optimizer run
-- Add all prioritiztions to the resulting graph in gray and the average in red
++ Add all prioritiztions to the resulting graph in gray and the average in red
 """
