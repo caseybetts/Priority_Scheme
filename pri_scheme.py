@@ -175,16 +175,13 @@ class Priority_Optimizer:
         self.active_orders.Bucket = self.active_orders.apply( lambda x: bucketing_function(x.DollarPerSquare), axis=1)
 
     def populate_priority(self, priority_list):
-        """ Add a priority to each order based on the value bucket"""
+        """ Add a priority to each order based on the value bucket """
 
-        # Create a list of tuples where the tuple elements are (bucket, priority)
-        bucket_priority_list = []
+        # Create a dictionary with key/value pairs of bucket/priority
+        bucket_to_pri_map = dict()
 
         for bucket in range(self.number_of_dollar_val_buckets):
-            bucket_priority_list.append((bucket, priority_list[-bucket]))
-
-        # Create a dictionary using the list of tuples with key/value pairs of bucket/priority
-        bucket_to_pri_map = dict(bucket_priority_list)
+            bucket_to_pri_map[bucket] = priority_list[-bucket]
         
         # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
         self.active_orders.New_Priority = self.active_orders.Bucket.map(bucket_to_pri_map)
@@ -277,8 +274,6 @@ class Priority_Optimizer:
 
     def run_weather_scenarios(self):
         """ This will run the 'run clear scenarios' function for multiple weather scenarios and return an average prioritization from the results"""
-
-        prioritizations = []
 
         for weather_column in range(self.weather_scenarios):
 
