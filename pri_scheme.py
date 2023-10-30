@@ -354,4 +354,9 @@ if __name__ == "__main__":
 - Create a Readout function prior to running the scenarios
 + Add an Average readout to each optimizer run
 + Add all prioritiztions to the resulting graph in gray and the average in red
+
+- Incoperate the max_cc into the scheduling logic
+    - Use max_cc_weather_multiplyer =1/(Weather_Prediction - Max_CC + 1)
+    - Cap the max_cc value at .8 (max_cc values close to 1 will cause the multiplyer to skyrocket)
+
 """

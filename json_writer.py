@@ -36,15 +36,15 @@ data = {
                                     100069: 8},
     
     "MCP_dollar_values": {
-        698: 7,
-        708: 6,
-        718: 5,
-        738: 4,
-        748: 2.5,
-        758: 2,
-        768: 1.5,
-        778: 1.3,
-        788: 1
+        698: 3,
+        708: 2.75,
+        718: 2.25,
+        738: 1.75,
+        748: 1.25,
+        758: 1,
+        768: .75,
+        778: .5,
+        788: .3
     },
 
     "initial priorities" : [    750,
@@ -87,7 +87,7 @@ data = {
                          (700, 800)],
 
     "number of weather scenarios" : 5,
-    "dollar bin breakpoints" : [20, 15, 12, 10, 8, 6, 4, 3, 2, 1, 0],
+    "dollar bin breakpoints" : [20, 15, 12, 10, 7, 5, 3, 2, 1, .5, 0],
     "optimization method" : 'Nelder-Mead',
     "optimization tolerance" : .01,
     "predicted cloud cover uncertainty" : .3            # See note above
