@@ -20,7 +20,7 @@ input_parameters_file_name = argv[1]
 # Initialize the random number generator
 rng = random.default_rng()
 
-# Reads in the 
+# Reads in the input parameters
 with open(input_parameters_file_name, 'r') as input:
     parameters = json.load(input)
 
@@ -35,16 +35,16 @@ class Priority_Optimizer:
         self.cloud_cover_folder = parameters["clouds_folder"]
 
         # Optimization related variables
-        self.scale = 1e-5
+        self.scale = .01
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.initial_priorities = parameters["initial priorities"]
+        self.initial_coefficients = parameters["initial_coefficients"]
         self.bounds = parameters["priority bounds"]
         self.average_prioritizations = []
-        self.final_optimal_priorities = []
+        self.final_optimal_coefficients = []
         self.number_of_dollar_val_buckets = len(parameters["dollar bin breakpoints"]) + 1
         self.pri_scheme_total_dollars = []
-        self.prioritizations = []
+        self.coefficients = []
 
         # Dataframe related variables
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
@@ -119,7 +119,6 @@ class Priority_Optimizer:
     
     def populate_actual_cc(self):
         """ Choose an actual cloud cover score for each order """
-        print("Running ", self.weather_scenarios," weather scenarios")
         
         # Create acutal cloud value columns
         for column_number in range(self.weather_scenarios):
@@ -174,17 +173,24 @@ class Priority_Optimizer:
             
         self.active_orders.Bucket = self.active_orders.apply( lambda x: bucketing_function(x.DollarPerSquare), axis=1)
 
-    def populate_priority(self, priority_list):
-        """ Add a priority to each order based on the value bucket """
+    def priority_function(self, coefficients, val):
+        """ Defines the function for priority as a function of dollar value """
+
+        a,b,c,d,e = coefficients
+
+        return a*(val-10)**4 + b*(val-10)**3 + c*(val-10)**2 + d*(val-10) + e
+
+    def populate_priority(self, coefficients):
+        """ Add a priority to each order based on the dollar value """
 
         # Create a dictionary with key/value pairs of bucket/priority
-        bucket_to_pri_map = dict()
+        # bucket_to_pri_map = dict()
 
-        for bucket in range(self.number_of_dollar_val_buckets):
-            bucket_to_pri_map[bucket] = priority_list[-bucket]
+        # for bucket in range(self.number_of_dollar_val_buckets):
+        #     bucket_to_pri_map[bucket] = priority_list[-bucket]
         
-        # Set the priority value equal to the corresponding value in the dictionary using the pandas mapping function based on the dollar value
-        self.active_orders.New_Priority = self.active_orders.Bucket.map(bucket_to_pri_map)
+        # Set the priority value based on the current dollar to priority funciton
+        self.active_orders.New_Priority = self.active_orders.apply(lambda x: self.priority_function(coefficients, x.DollarPerSquare), axis=1)
 
     def priority_to_score(self, priority):
         """ Given a priority will return a score based on the FOM curve"""
@@ -242,11 +248,11 @@ class Priority_Optimizer:
 
         return self.total_dollars(weather_column)
 
-    def run_priority_scheme(self, priority_scheme, weather_column):
+    def run_priority_scheme(self, coefficients, weather_column):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
 
         # Apply the given priority values to the orders
-        self.populate_priority(priority_scheme)
+        self.populate_priority(coefficients)
         self.populate_score()
 
         total = self.run_scenario(weather_column)
@@ -257,13 +263,11 @@ class Priority_Optimizer:
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
 
         scaled_bounds = [ (x * self.scale, y * self.scale) for x, y in self.bounds ]        # Note: Can't be used with BFGS method (bounds=scaled_bounds,)
-        scaled_initial_priorities = [x * self.scale for x in self.initial_priorities ]
-
+        scaled_initial_coefficients = [x * self.scale for x in self.initial_coefficients]
 
         result = minimize(self.run_priority_scheme, 
-                          scaled_initial_priorities, 
-                          args=weather_column,
-                          bounds=scaled_bounds, 
+                          scaled_initial_coefficients, 
+                          args=weather_column, 
                           tol=self.optimization_tolerance, 
                           method=self.optimization_method)
 
@@ -284,13 +288,13 @@ class Priority_Optimizer:
             self.pri_scheme_total_dollars = []
 
             optimization_result = self.optimal_priorities(weather_column)
-            self.prioritizations.append([x / self.scale for x in optimization_result.x])
+            self.coefficients.append([x / self.scale for x in optimization_result.x])
 
             # Timing and readout
             end_time = time()
             print("\n----------------------------------------------------------------")
             print("Time elapsed for a weather scenario: ", end_time - start_time)
-            print("Prioritization: ", self.prioritizations[-1])
+            print("Prioritization: ", self.coefficients[-1])
             print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
             print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
             print("Final $ value: $", -optimization_result.fun)
@@ -299,7 +303,7 @@ class Priority_Optimizer:
 
 
         # Save the average of the prioritization sets found as the final result
-        self.final_optimal_priorities = [(sum(x)/len(x)) for x in zip(*self.prioritizations)]
+        self.final_optimal_coefficients = [(sum(x)/len(x)) for x in zip(*self.coefficients)]
 
     def run_test_case(self):
         """ Will run the priority_scheme function for the test case priority set """
@@ -313,17 +317,23 @@ class Priority_Optimizer:
         # Return the average total dollar value
         return sum(total_dollars_for_each_weather_scenario)/len(total_dollars_for_each_weather_scenario)
 
+    def startup_readout(self):
+        """ Prints out useful information prior to running the program """
+
+        print("Running ", self.weather_scenarios," weather scenarios")
+        print("Method: ", self.optimization_method)
+
     def display_results(self):
-        """ Will print the resulting optimal priority set as well as display a graph of the same """
+        """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
-        print("\n\nThe final prioritization is: ", self.final_optimal_priorities)
+        print("\n\nThe final prioritization is: ", self.final_optimal_coefficients)
 
-        x_axis = [30] + self.dollar_breaks
+        x_axis = range(30)
 
-        for prioritiztion in self.prioritizations:
-            plt.plot(x_axis, prioritiztion, color='lavender', linestyle='solid')
+        for coefficients in self.coefficients:
+            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='lavender', linestyle='solid')
 
-        plt.plot(x_axis, self.final_optimal_priorities, 'o-r')
+        plt.plot(x_axis, [self.priority_function(self.final_optimal_coefficients, x) for x in x_axis], 'o-r')
         plt.show()
 
 
@@ -358,5 +368,7 @@ if __name__ == "__main__":
 - Incoperate the max_cc into the scheduling logic
     - Use max_cc_weather_multiplyer =1/(Weather_Prediction - Max_CC + 1)
     - Cap the max_cc value at .8 (max_cc values close to 1 will cause the multiplyer to skyrocket)
+- Add weather file name to readout
+- Add a try block before creating the final .csv
 
 """

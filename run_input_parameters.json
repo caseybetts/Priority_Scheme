@@ -31,6 +31,7 @@
         "778": 0.5,
         "788": 0.3
     },
+    "initial_coefficients": [0.03, 0, -2, 0, 50],
     "initial priorities": [
         750,
         750,
@@ -109,7 +110,7 @@
             800
         ]
     ],
-    "number of weather scenarios": 10,
+    "number of weather scenarios": 5,
     "dollar bin breakpoints": [
         20,
         15,
