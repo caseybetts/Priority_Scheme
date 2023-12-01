@@ -21,17 +21,17 @@
         "100069": 8
     },
     "MCP_dollar_values": {
-        "698": 3,
-        "708": 2.75,
-        "718": 2.25,
-        "738": 1.75,
-        "748": 1.25,
-        "758": 1,
-        "768": 0.75,
-        "778": 0.5,
-        "788": 0.3
+        "698": 2,
+        "708": 1.75,
+        "718": 1.25,
+        "738": 0.75,
+        "748": 0.25,
+        "758": 0,
+        "768": -0.25,
+        "778": -0.5,
+        "788": -0.6
     },
-    "initial_coefficients": [0.03, 0, -2, 0, 50],
+    "initial_coefficients": [0, 0, 1, 1, -2, -0.1],
     "initial priorities": [
         750,
         750,
@@ -61,70 +61,16 @@
         781
     ],
     "priority bounds": [
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ],
-        [
-            700,
-            800
-        ]
+        [0,0],
+        [-0,100],
+        [-2,2],
+        [-5,2.5],
+        [-4,3]
     ],
-    "number of weather scenarios": 5,
-    "dollar bin breakpoints": [
-        20,
-        15,
-        12,
-        10,
-        7,
-        5,
-        3,
-        2,
-        1,
-        0.5,
-        0
-    ],
-    "optimization method": "Nelder-Mead",
-    "optimization tolerance": 0.01,
-    "predicted cloud cover uncertainty": 0.3
+    "number of weather scenarios": 3,
+    "optimization method": "COBYLA",
+    "optimization tolerance": 0.001,
+    "predicted cloud cover uncertainty": 0.3,
+    "polynomial_degree": 3,
+    "weather_type": "clear"
 }
