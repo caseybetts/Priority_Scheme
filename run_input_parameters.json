@@ -46,19 +46,9 @@
         750,
         750
     ],
-    "test case priorities": [
-        730,
-        752,
-        755,
-        757,
-        768,
-        768,
-        768,
-        769,
-        791,
-        765,
-        757,
-        781
+    "test coefficients": [
+        {"const":0, "linear":1, "quadratic":1, "cubic":1, "quartic":1, "sine":1, "cosine":1},
+        {"const":0, "linear":2, "quadratic":2, "cubic":2, "quartic":2, "sine":2, "cosine":2}  
     ],
     "priority bounds": [
         [0,0],

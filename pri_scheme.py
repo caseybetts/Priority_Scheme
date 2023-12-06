@@ -36,7 +36,6 @@ class Priority_Optimizer:
 
         # Optimization related variables
         self.poly_degree = parameters["polynomial_degree"]
-        self.scale = 1
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
         self.initial_coefficients = parameters["initial_coefficients"][-(self.poly_degree + 1):]
@@ -53,7 +52,7 @@ class Priority_Optimizer:
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
         self.weather_scenarios = parameters["number of weather scenarios"]
-        self.test_priorities = parameters["test case priorities"]
+        self.test_coefficients = parameters["test coefficients"]
         self.predicted_cc_uncertainty = parameters["predicted cloud cover uncertainty"] * 2                     # Standard Deviation of the normal distribution  
         self.cloud_cover_buckets = {}
         self.weather_type = parameters["weather_type"]
@@ -195,7 +194,7 @@ class Priority_Optimizer:
         # Return the value of a trig function with 2 variables
         a,b,c,d = coefficients
 
-        return a + b * (x-10) + c * (x-10)**2 + d * (x-10)**3
+        return a + b * .01 * (x-10) + c * .0011 * (x-10)**2 + d * .000037 * (x-10)**3
 
     def populate_priority(self, coefficients):
         """ Add a priority to each order based on the dollar value """
@@ -261,11 +260,7 @@ class Priority_Optimizer:
 
     def run_priority_scheme(self, coefficients, weather_column):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
-                
-        # Unscale priorities
-        coefficients = [x / self.scale for x in coefficients ]
 
-    
         # Apply the given priority values to the orders
         self.populate_priority(coefficients)
         self.populate_score()
@@ -273,20 +268,17 @@ class Priority_Optimizer:
         total = self.run_scenario(weather_column)
         self.run_coefficients.append(coefficients)
 
-        print("Coefficients: ", coefficients, " yeilded : $", -total)
+        print("Coefficients: ", coefficients, " yeild : $", -total)
         
         return -total
     
     def optimal_priorities(self, weather_column):
         """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
 
-        scaled_bounds = [ (x * self.scale, y * self.scale) for x, y in self.bounds ]        # Note: Can't be used with BFGS method (bounds=scaled_bounds,)
-        scaled_initial_coefficients = [x * self.scale for x in self.initial_coefficients]
-
         result = minimize(self.run_priority_scheme, 
-                          scaled_initial_coefficients, 
+                          self.initial_coefficients, 
                           args=weather_column, 
-                          bounds=scaled_bounds,
+                          bounds=self.bounds,
                           tol=self.optimization_tolerance, 
                           method=self.optimization_method,
                           options={"maxiter":150})
@@ -311,7 +303,7 @@ class Priority_Optimizer:
             self.pri_scheme_total_dollars = []
 
             optimization_result = self.optimal_priorities(weather_column)
-            self.coefficients.append([x / self.scale for x in optimization_result.x])
+            self.coefficients.append(optimization_result.x)
             print(optimization_result)
 
             # Timing and readout
@@ -329,14 +321,19 @@ class Priority_Optimizer:
         # Save the average of the prioritization sets found as the final result
         self.final_optimal_coefficients = [(sum(x)/len(x)) for x in zip(*self.coefficients)]
 
-    def run_test_case(self):
-        """ Will run the priority_scheme function for the test case priority set """
+    def run_test_cases(self):
+        """ Will run the weather scenarios for all the given test cases """
 
         total_dollars_for_each_weather_scenario = []
 
-        for weather_column in range(self.weather_scenarios):
-            # Produce a total dollar value for a given weather scenario (column) and append to a list
-            total_dollars_for_each_weather_scenario.append(self.run_priority_scheme(self.test_priorities, weather_column))
+        test_coefficients = [self.test_coefficients["const"]]
+        test_coefficients.append(self.test_coefficients["linear"])
+
+        for test_case in self.test_coefficients:
+
+            for weather_column in range(self.weather_scenarios):
+                # Produce a total dollar value for a given weather scenario (column) and append to a list
+                total_dollars_for_each_weather_scenario.append(self.run_priority_scheme(self.test_coefficients[test_case], weather_column))
 
         # Return the average total dollar value
         return sum(total_dollars_for_each_weather_scenario)/len(total_dollars_for_each_weather_scenario)
@@ -385,7 +382,7 @@ if __name__ == "__main__":
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
     priority_optimizer.run_weather_scenarios()
-    # print(priority_optimizer.run_test_case())
+    # print(priority_optimizer.run_test_cases())
     priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
     priority_optimizer.display_results()
 
@@ -408,6 +405,8 @@ if __name__ == "__main__":
     - One class to initialize with the parameteres for the pri function (0 meaning that the term will not be used)
     - One to run the optimization function 
 + add a bit of variance in dollar value between like orders so all $ values are different
-- Plot each iteration of the optimization function
++ Plot each iteration of the optimization function
+- Create a regimen of functions to manually test a variety of funcitons/coefficients
+- Try a version that updates the score directly based on dollar value
 
 """
