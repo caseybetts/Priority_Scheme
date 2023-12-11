@@ -16,13 +16,18 @@ from time import time
 
 # Applicable json file name with parameters
 input_parameters_file_name = argv[1]
+test_case_loc = argv[2]
 
 # Initialize the random number generator
 rng = random.default_rng()
 
-# Reads in the input parameters
+# Read in the input parameters
 with open(input_parameters_file_name, 'r') as input:
     parameters = json.load(input)
+
+# Read in the test coefficient .csv to a dataframe
+test_cases = pd.read_csv(test_case_loc)
+print(test_cases)
 
 
 class Priority_Optimizer:
@@ -381,10 +386,10 @@ if __name__ == "__main__":
     
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
-    priority_optimizer.run_weather_scenarios()
+    # priority_optimizer.run_weather_scenarios()
     # print(priority_optimizer.run_test_cases())
-    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
-    priority_optimizer.display_results()
+    # priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
+    # priority_optimizer.display_results()
 
 
 
