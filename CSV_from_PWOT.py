@@ -7,7 +7,6 @@ import pandas as pd
 
 from os import listdir
 
-PWOT_filename = 'PWOT\PWOT_20231007T103000000Z.tif'
 orders_filename = 'active_orders.csv'
 
 def PWOT_dataframe(PWOT_filename):
