@@ -7,8 +7,9 @@ import json
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from math import exp, cos
-from numpy import random, count_nonzero
+from datetime import datetime
+from math import exp, sin, cos
+from numpy import random, count_nonzero, isnan
 from os import listdir
 from scipy.optimize import minimize
 from sys import argv 
@@ -27,8 +28,6 @@ with open(input_parameters_file_name, 'r') as input:
 
 # Read in the test coefficient .csv to a dataframe
 test_cases = pd.read_csv(test_case_loc)
-print(test_cases)
-
 
 class Priority_Optimizer:
     """ Contains the functions required to produce an optimal set of priorities for a given set of orders and cloud values """
@@ -181,26 +180,12 @@ class Priority_Optimizer:
 
     def priority_function(self, coefficients, x):
         """ Defines the function for priority as a function of dollar value """
-
-        # Return the value of a polynomial function based on the number of non-zero coefficients
-        # if self.poly_degree == 1:
-        #     d,e = coefficients
-        #     return d*(x-10) + e
-        # elif self.poly_degree == 2:
-        #     c,d,e = coefficients
-        #     return c*(x-10)**2 + d*(x-10) + e 
-        # elif self.poly_degree == 3:
-        #     b,c,d,e = coefficients
-        #     return b*(x-10)**3 + c*(x-10)**2 + d*(x-10) + e
-        # elif self.poly_degree == 4:
-        #     a,b,c,d,e = coefficients
-        #     return a*(x-10)**4 + b*(x-10)**3 + c*(x-10)**2 + d*(x-10) + e
         
         # Return the value of a trig function with 2 variables
-        a,b,c,d = coefficients
+        a,b,c,d,e,f,g = coefficients
 
-        return a + b * .01 * (x-10) + c * .0011 * (x-10)**2 + d * .000037 * (x-10)**3
-
+        return a + (b * .01 * (x-10)) + (c * .0011 * (x-10)**2) + (d * .000037 * (x-10)**3) + (e * .0000001 * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+ 
     def populate_priority(self, coefficients):
         """ Add a priority to each order based on the dollar value """
         
@@ -266,6 +251,8 @@ class Priority_Optimizer:
     def run_priority_scheme(self, coefficients, weather_column):
         """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
 
+        coefficients = [0 if isnan(x) else x for x in coefficients]
+
         # Apply the given priority values to the orders
         self.populate_priority(coefficients)
         self.populate_score()
@@ -329,19 +316,18 @@ class Priority_Optimizer:
     def run_test_cases(self):
         """ Will run the weather scenarios for all the given test cases """
 
-        total_dollars_for_each_weather_scenario = []
-
-        test_coefficients = [self.test_coefficients["const"]]
-        test_coefficients.append(self.test_coefficients["linear"])
-
-        for test_case in self.test_coefficients:
+        for test_case in range(test_cases.index.size):
 
             for weather_column in range(self.weather_scenarios):
                 # Produce a total dollar value for a given weather scenario (column) and append to a list
-                total_dollars_for_each_weather_scenario.append(self.run_priority_scheme(self.test_coefficients[test_case], weather_column))
+                test_cases.iat[test_case,7] = self.run_priority_scheme(test_cases.iloc[test_case,:7], weather_column)
 
-        # Return the average total dollar value
-        return sum(total_dollars_for_each_weather_scenario)/len(total_dollars_for_each_weather_scenario)
+        print(test_cases)
+
+        # Create a .csv file of the resulting dataframe
+        timestamp = str(datetime.now())[:19]
+        timestamp = timestamp.replace(':','-')
+        test_cases.to_csv('test_case_results_' + timestamp + '.csv')
 
     def startup_readout(self):
         """ Prints out useful information prior to running the program """
@@ -387,7 +373,7 @@ if __name__ == "__main__":
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
     # priority_optimizer.run_weather_scenarios()
-    # print(priority_optimizer.run_test_cases())
+    priority_optimizer.run_test_cases()
     # priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
     # priority_optimizer.display_results()
 
