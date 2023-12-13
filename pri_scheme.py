@@ -327,7 +327,7 @@ class Priority_Optimizer:
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        test_cases.to_csv('test_case_results_' + timestamp + '.csv')
+        test_cases.to_csv(r'Test_Case_Outputs\test_case_results_' + timestamp + '.csv')
 
     def startup_readout(self):
         """ Prints out useful information prior to running the program """
