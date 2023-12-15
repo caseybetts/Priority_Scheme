@@ -16,18 +16,18 @@ from sys import argv
 from time import time
 
 # Applicable json file name with parameters
-input_parameters_file_name = argv[1]
-test_case_loc = argv[2]
+loc_parameter_inputs = argv[1]
+loc_case_inputs = argv[2]
 
 # Initialize the random number generator
 rng = random.default_rng()
 
 # Read in the input parameters
-with open(input_parameters_file_name, 'r') as input:
+with open(loc_parameter_inputs, 'r') as input:
     parameters = json.load(input)
 
 # Read in the test coefficient .csv to a dataframe
-test_cases = pd.read_csv(test_case_loc)
+case_inputs = pd.read_csv(loc_case_inputs)
 
 class Priority_Optimizer:
     """ Contains the functions required to produce an optimal set of priorities for a given set of orders and cloud values """
@@ -39,12 +39,8 @@ class Priority_Optimizer:
         self.cloud_cover_folder = parameters["clouds_folder"]
 
         # Optimization related variables
-        self.poly_degree = parameters["polynomial_degree"]
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.initial_coefficients = parameters["initial_coefficients"][-(self.poly_degree + 1):]
-        self.bounds = parameters["priority bounds"][-(self.poly_degree + 1):]
-        self.average_prioritizations = []
         self.final_optimal_coefficients = []
         self.pri_scheme_total_dollars = []
         self.coefficients = []
@@ -227,121 +223,108 @@ class Priority_Optimizer:
             latitude += 2                                                                                         
     
     def total_dollars(self, weather_column):
-        """ Returns the sum of all the dollars per square with actual CC value less than the max cc """
+        """ Returns the sum of the dollars per square value of the schedule orders where actual CC value less than the max cc """
 
+        # Get a sum of the dollars per square of the slice of orders that are scheduled and within cloud spec
         total_dollars = self.active_orders.DollarPerSquare[  (self.active_orders.Scheduled == True) & 
                                                     (self.active_orders.MAX_CC > self.active_orders["Actual_" + str(weather_column)])].sum()
         
+        # Append the total dollars to the master list
         self.pri_scheme_total_dollars.append(total_dollars)
 
-        return total_dollars + rng.standard_normal()
+        return total_dollars
 
-    def run_scenario(self, weather_column):
-        """ This will reassign each order with a random weather prediction and then reschedule orders accordingly and return a total dollar amount """
+    def cost_function(self,coefficients):
+        """ Returns the average dollar amount produced by all weather scenarios """
+        
+        print(coefficients)
 
-        # Reset the schedule by setting all 'Scheduled' to False
-        self.active_orders.Scheduled = False
-
-        # Calculate the total score and which orders are scheduled
-        self.populate_total_score(weather_column)
-        self.schedule_orders()
-
-        return self.total_dollars(weather_column)
-
-    def run_priority_scheme(self, coefficients, weather_column):
-        """ Will run the set number of scenarios with a given prioritization scheme and return the average total dollar value """
-
+        # Replace the NaN values with 0
         coefficients = [0 if isnan(x) else x for x in coefficients]
 
-        # Apply the given priority values to the orders
+        # Populate the priority values and therefore the order scores in the dataframe according to the new coefficients
         self.populate_priority(coefficients)
         self.populate_score()
 
-        total = self.run_scenario(weather_column)
-        self.run_coefficients.append(coefficients)
+        average_dollar_total = 0
 
-        print("Coefficients: ", coefficients, " yeild : $", -total)
-        
-        return -total
+        # Populate the total score and schedule the orders accordingly for each weather scenario
+        for weather_column in range(self.weather_scenarios):
+
+            self.populate_total_score(weather_column)
+            self.schedule_orders()
+
+            # Add the resulting total dollars for the current weather scenario
+            average_dollar_total += self.total_dollars(weather_column)
+
+        # Get the average dollar amounts for all the weather scenarios
+        average_dollar_total = average_dollar_total / self.weather_scenarios
+
+        # Return the average with a small perterbation to keep the optimizer from getting stuck
+        return -average_dollar_total + rng.normal()
     
-    def optimal_priorities(self, weather_column):
-        """ Uses the SciPy optimization tools to find the optimal prioritization scheme to maximize revenue for a given clear scenario """
+    def optimizer(self, initial_coefficients):
+        """ Uses the SciPy optimization to find the optimal prioritization curve to maximize revenue """
 
-        result = minimize(self.run_priority_scheme, 
-                          self.initial_coefficients, 
-                          args=weather_column, 
-                          bounds=self.bounds,
+        result = minimize(self.cost_function, 
+                          initial_coefficients,
                           tol=self.optimization_tolerance, 
                           method=self.optimization_method,
                           options={"maxiter":150})
-        
-        self.iterated_coefficients.append(self.run_coefficients)
-        self.run_coefficients = []
-
+                
         if result.success:
             return result
         else:
             raise ValueError(result.message)
+        
+    def run_optimizations(self):
+        """ Runs the optimizer for each row of initial coefficients in the dataframe """
 
-    def run_weather_scenarios(self):
-        """ This will run the 'run clear scenarios' function for multiple weather scenarios and return an average prioritization from the results"""
+        for starting_point in range(case_inputs.index.size):
 
-        for weather_column in range(self.weather_scenarios):
+            # print(case_inputs.iloc[starting_point,:7])
+            print("starting point :", starting_point)
+            print(list(case_inputs.iloc[starting_point,:7]))
 
-            # Timing 
-            start_time = time()
+            case_inputs.iat[starting_point,7] = self.optimizer(case_inputs.iloc[starting_point,:7]).fun
 
-            # Reset the list of total dollar values
-            self.pri_scheme_total_dollars = []
+        print(case_inputs)
+        
+    def run_simple_cases(self):
+        """ Will run the cost funciton for all the given test cases """
 
-            optimization_result = self.optimal_priorities(weather_column)
-            self.coefficients.append(optimization_result.x)
-            print(optimization_result)
+        for test_case in range(case_inputs.index.size):
 
-            # Timing and readout
-            end_time = time()
-            print("\n----------------------------------------------------------------")
-            print("Time elapsed for a weather scenario: ", end_time - start_time)
-            print("Prioritization: ", self.coefficients[-1])
-            print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
-            print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
-            print("Final $ value: $", -optimization_result.fun)
-            print("----------------------------------------------------------------")
+            # Produce a total dollar value for a given weather scenario (column) and append to a list
+            case_inputs.iat[test_case,7] = self.cost_function(case_inputs.iloc[test_case,:7])
 
-
-
-        # Save the average of the prioritization sets found as the final result
-        self.final_optimal_coefficients = [(sum(x)/len(x)) for x in zip(*self.coefficients)]
-
-    def run_test_cases(self):
-        """ Will run the weather scenarios for all the given test cases """
-
-        for test_case in range(test_cases.index.size):
-
-            for weather_column in range(self.weather_scenarios):
-                # Produce a total dollar value for a given weather scenario (column) and append to a list
-                test_cases.iat[test_case,7] = self.run_priority_scheme(test_cases.iloc[test_case,:7], weather_column)
-
-        print(test_cases)
+        print(case_inputs)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        test_cases.to_csv(r'Test_Case_Outputs\test_case_results_' + timestamp + '.csv')
+        case_inputs.to_csv(r'Test_Case_Outputs\test_case_results_' + timestamp + '.csv')
 
     def startup_readout(self):
         """ Prints out useful information prior to running the program """
 
         print("Running ", self.weather_scenarios," weather scenarios")
-        print("Method: ", self.optimization_method)
-        print("self.scheduled_column_index :", self.scheduled_column_index)
-        print("Initial Coefficients: ", self.initial_coefficients)
-        
-        if count_nonzero(self.initial_coefficients) != self.poly_degree + 1:
-            print("WARNING: You will have unused coefficients since your polynomial degree is ", self.poly_degree)
+        print("Optimization Method: ", self.optimization_method)
+
+        # Timing 
+        self.start_time = time()
 
     def display_results(self):
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
+
+        # Timing and readout
+        print("\n----------------------------------------------------------------")
+        print("Time elapsed for coefficient run: ", time() - self.start_time)
+        # print("Prioritization: ", self.coefficients[-1])
+        # print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
+        # print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
+        # print("Final $ value: $", -optimization_result.fun)
+        print("----------------------------------------------------------------")
 
         print("\n\nThe final prioritization is: ", self.final_optimal_coefficients)
 
@@ -372,8 +355,8 @@ if __name__ == "__main__":
     
     # Create calculator object
     priority_optimizer = Priority_Optimizer()
-    # priority_optimizer.run_weather_scenarios()
-    priority_optimizer.run_test_cases()
+    priority_optimizer.run_optimizations()
+    # priority_optimizer.run_simple_cases()
     # priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
     # priority_optimizer.display_results()
 
