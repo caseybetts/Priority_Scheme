@@ -26,8 +26,6 @@ rng = random.default_rng()
 with open(loc_parameter_inputs, 'r') as input:
     parameters = json.load(input)
 
-# Read in the test coefficient .csv to a dataframe
-case_inputs = pd.read_csv(loc_case_inputs)
 
 class Priority_Optimizer:
     """ Contains the functions required to produce an optimal set of priorities for a given set of orders and cloud values """
@@ -65,7 +63,7 @@ class Priority_Optimizer:
 
         # Run initial functions
         self.load_data()
-        self.prepare_dataframe()
+        self.prepare_dataframes()
         self.startup_readout()
 
         
@@ -74,6 +72,7 @@ class Priority_Optimizer:
 
         # Load orders and image strips .csv files into pandas dataframes
         self.active_orders = pd.read_csv(self.active_orders_location)
+        self.case_inputs = pd.read_csv(loc_case_inputs)
 
         # Create variable to contain the latitudes that have orders in them
         self.active_latitudes = set(self.active_orders.Latitude)
@@ -82,7 +81,7 @@ class Priority_Optimizer:
         self.min_latitude = min(self.active_latitudes)
         self.max_latitude = max(self.active_latitudes)
 
-    def prepare_dataframe(self):
+    def prepare_dataframes(self):
         """ Create and populate all columns required prior to starting the optimization process """
 
         self.add_columns()
@@ -105,8 +104,12 @@ class Priority_Optimizer:
         self.active_orders["Total_Score"] = 0
         self.active_orders["Scheduled"] = False 
 
-        # Update the schedule column index accordingly
+        # Add Total column to the cases dataframe
+        self.case_inputs["Total"] = 0
+
+        # Save the index of new columns
         self.scheduled_column_index = self.active_orders.columns.get_loc("Scheduled")
+        self.total_column_index = self.case_inputs.columns.get_loc("Total")
             
     def find_cloud_cover(self, lat, lon):
         """ Given a latitude and longitude this will return the nearest cloud cover value from the PWOT .csv """
@@ -237,8 +240,6 @@ class Priority_Optimizer:
     def cost_function(self,coefficients):
         """ Returns the average dollar amount produced by all weather scenarios """
         
-        print(coefficients)
-
         # Replace the NaN values with 0
         coefficients = [0 if isnan(x) else x for x in coefficients]
 
@@ -263,47 +264,53 @@ class Priority_Optimizer:
         # Return the average with a small perterbation to keep the optimizer from getting stuck
         return -average_dollar_total + rng.normal()
     
-    def optimizer(self, initial_coefficients):
-        """ Uses the SciPy optimization to find the optimal prioritization curve to maximize revenue """
-
-        result = minimize(self.cost_function, 
-                          initial_coefficients,
-                          tol=self.optimization_tolerance, 
-                          method=self.optimization_method,
-                          options={"maxiter":150})
-                
-        if result.success:
-            return result
-        else:
-            raise ValueError(result.message)
-        
     def run_optimizations(self):
         """ Runs the optimizer for each row of initial coefficients in the dataframe """
 
-        for starting_point in range(case_inputs.index.size):
+        for starting_point in range(self.case_inputs.index.size):
 
-            # print(case_inputs.iloc[starting_point,:7])
             print("starting point :", starting_point)
-            print(list(case_inputs.iloc[starting_point,:7]))
+            print(list(self.case_inputs.iloc[starting_point,:self.total_column_index]))
 
-            case_inputs.iat[starting_point,7] = self.optimizer(case_inputs.iloc[starting_point,:7]).fun
+            # Uses the SciPy minimize function to find the optimal prioritization curve to maximize revenue
+            result = minimize(self.cost_function, 
+                            self.case_inputs.iloc[starting_point,:self.total_column_index],
+                            tol=self.optimization_tolerance, 
+                            method=self.optimization_method,
+                            options={"maxiter":150})
+            
+            # Check for success or raise an error
+            if not result.success:
+                raise ValueError(result.message)
 
-        print(case_inputs)
-        
-    def run_simple_cases(self):
-        """ Will run the cost funciton for all the given test cases """
+            # Update the Total column with the final dollar value result 
+            self.case_inputs.iat[starting_point,self.total_column_index] = result.fun
 
-        for test_case in range(case_inputs.index.size):
+            # Update the coefficient columns with the final coefficients
+            for column in range(self.total_column_index):
+                self.case_inputs.iat[starting_point, column] = result.x[column]
 
-            # Produce a total dollar value for a given weather scenario (column) and append to a list
-            case_inputs.iat[test_case,7] = self.cost_function(case_inputs.iloc[test_case,:7])
-
-        print(case_inputs)
+        print(self.case_inputs)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        case_inputs.to_csv(r'Test_Case_Outputs\test_case_results_' + timestamp + '.csv')
+        self.case_inputs.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
+        
+    def run_simple_cases(self):
+        """ Will run the cost funciton for all the given test cases """
+
+        for test_case in range(self.case_inputs.index.size):
+
+            # Produce a total dollar value for the current test case
+            self.case_inputs.iat[test_case, self.total_column_index] = self.cost_function(self.case_inputs.iloc[test_case, :self.total_column_index])
+
+        print(self.case_inputs)
+
+        # Create a .csv file of the resulting dataframe
+        timestamp = str(datetime.now())[:19]
+        timestamp = timestamp.replace(':','-')
+        self.case_inputs.to_csv(r'Test_Case_Outputs\simple_case_results_' + timestamp + '.csv')
 
     def startup_readout(self):
         """ Prints out useful information prior to running the program """
