@@ -262,7 +262,7 @@ class Priority_Optimizer:
         average_dollar_total = average_dollar_total / self.weather_scenarios
 
         # Return the average with a small perterbation to keep the optimizer from getting stuck
-        return -average_dollar_total + rng.normal()
+        return -average_dollar_total + rng.normal() * .1
     
     def run_optimizations(self):
         """ Runs the optimizer for each row of initial coefficients in the dataframe """
@@ -289,6 +289,11 @@ class Priority_Optimizer:
             # Update the coefficient columns with the final coefficients
             for column in range(self.total_column_index):
                 self.case_inputs.iat[starting_point, column] = result.x[column]
+
+            # Timing
+            print("\n----------------------------------------------------------------")
+            print("Time elapsed for coefficient run: ", time() - self.start_time)
+            print(result)
 
         print(self.case_inputs)
 
@@ -324,11 +329,7 @@ class Priority_Optimizer:
     def display_results(self):
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
-        # Timing and readout
-        print("\n----------------------------------------------------------------")
-        print("Time elapsed for coefficient run: ", time() - self.start_time)
-        # print("Prioritization: ", self.coefficients[-1])
-        # print("Average $ value: $", sum(self.pri_scheme_total_dollars)/len(self.pri_scheme_total_dollars))
+
         # print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
         # print("Final $ value: $", -optimization_result.fun)
         print("----------------------------------------------------------------")

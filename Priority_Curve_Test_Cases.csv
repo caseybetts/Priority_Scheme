@@ -1,4 +1,12 @@
-Constant,Linear,Quadratic,Cubic,Quartic,Sine,Cosine,Total
-50,-1,,,,,,
-50,0,,,,,,
-50,1,,,,,,
+Constant,Linear,Quadratic,Cubic,Quartic,Sine,Cosine
+50,-5,,,,,
+50,-4,,,,,
+50,-3,,,,,
+50,-2,,,,,
+50,-1,,,,,
+50,0,,,,,
+50,1,,,,,
+50,2,,,,,
+50,3,,,,,
+50,4,,,,,
+50,5,,,,,
