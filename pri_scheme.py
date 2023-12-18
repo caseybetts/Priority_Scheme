@@ -5,13 +5,13 @@
 
 import json
 import matplotlib.pyplot as plt
-import pandas as pd
+import pandas as pd 
 
 from datetime import datetime
-from math import exp, sin, cos
+from math import exp, sin, cos, floor, fabs
 from numpy import random, count_nonzero, isnan
 from os import listdir
-from scipy.optimize import minimize
+from scipy.optimize import minimize, fmin
 from sys import argv 
 from time import time
 
@@ -40,7 +40,6 @@ class Priority_Optimizer:
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
         self.final_optimal_coefficients = []
-        self.pri_scheme_total_dollars = []
         self.coefficients = []
         self.run_coefficients = []
         self.iterated_coefficients = []
@@ -183,7 +182,7 @@ class Priority_Optimizer:
         # Return the value of a trig function with 2 variables
         a,b,c,d,e,f,g = coefficients
 
-        return a + (b * .01 * (x-10)) + (c * .0011 * (x-10)**2) + (d * .000037 * (x-10)**3) + (e * .0000001 * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+        return a + (b * (x-10)) + (c * (x-10)**2) + (d * (x-10)**3) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
  
     def populate_priority(self, coefficients):
         """ Add a priority to each order based on the dollar value """
@@ -231,17 +230,47 @@ class Priority_Optimizer:
         # Get a sum of the dollars per square of the slice of orders that are scheduled and within cloud spec
         total_dollars = self.active_orders.DollarPerSquare[  (self.active_orders.Scheduled == True) & 
                                                     (self.active_orders.MAX_CC > self.active_orders["Actual_" + str(weather_column)])].sum()
-        
-        # Append the total dollars to the master list
-        self.pri_scheme_total_dollars.append(total_dollars)
 
         return total_dollars
 
-    def cost_function(self,coefficients):
-        """ Returns the average dollar amount produced by all weather scenarios """
+    def curve_check(self, coefficients):
+        """ Checks that the given coefficients create a curve that adheres to the priority value requirements """
         
+        pri_max = 100
+        pri_min = 0
+        max_multiplyer = 1
+        min_multiplyer = 1
+        all_values = []
+
         # Replace the NaN values with 0
         coefficients = [0 if isnan(x) else x for x in coefficients]
+
+        # Get all values in a list
+        for i in range(100):
+            all_values.append(self.priority_function(coefficients, i))
+        
+        max_val = max(all_values)
+        min_val = min(all_values)
+
+        if max_val > pri_max:
+            max_multiplyer = floor(max_val - pri_max)
+        
+        if min_val < pri_min:
+            min_multiplyer = fabs(floor(pri_min - min_val))     
+        
+        return (max_multiplyer**2 + min_multiplyer**2)/2
+
+    def cost_function(self,coefficients):
+        """ Returns the average dollar amount produced by all weather scenarios """
+
+        # Timing 
+        start_time = time()
+
+        # Replace the NaN values with 0
+        coefficients = [0 if isnan(x) else x for x in coefficients]
+
+        # Check to see if the curve is within acceptable range and update the bad curve multiplier
+        multiplyer = self.curve_check(coefficients)
 
         # Populate the priority values and therefore the order scores in the dataframe according to the new coefficients
         self.populate_priority(coefficients)
@@ -260,40 +289,58 @@ class Priority_Optimizer:
 
         # Get the average dollar amounts for all the weather scenarios
         average_dollar_total = average_dollar_total / self.weather_scenarios
+        # Multiply by the 'out of bounds' multiplyer and add a small random value
+        average_dollar_total = -(average_dollar_total / multiplyer) + (rng.normal() * .1)
+
+        # Timing
+        print("\n----------------------------------------------------------------")
+        print("Time elapsed for cost function: ", time() - start_time)
+        print("Average dollar total: ", average_dollar_total)
+        print("multiplyer:", multiplyer)
+        print("Coefficients:", coefficients)
+
 
         # Return the average with a small perterbation to keep the optimizer from getting stuck
-        return -average_dollar_total + rng.normal() * .1
+        return average_dollar_total
     
     def run_optimizations(self):
         """ Runs the optimizer for each row of initial coefficients in the dataframe """
 
         for starting_point in range(self.case_inputs.index.size):
 
+            # Get the coefficients
+            coefficients = self.case_inputs.iloc[starting_point,:self.total_column_index]
+
             print("starting point :", starting_point)
-            print(list(self.case_inputs.iloc[starting_point,:self.total_column_index]))
+            print(coefficients)
 
-            # Uses the SciPy minimize function to find the optimal prioritization curve to maximize revenue
-            result = minimize(self.cost_function, 
-                            self.case_inputs.iloc[starting_point,:self.total_column_index],
-                            tol=self.optimization_tolerance, 
-                            method=self.optimization_method,
-                            options={"maxiter":150})
+            if self.curve_check(coefficients) == 1:
+                
+                # Uses the SciPy minimize function to find the optimal prioritization curve to maximize revenue
+                result = minimize(self.cost_function, 
+                                coefficients,
+                                tol=self.optimization_tolerance, 
+                                method=self.optimization_method,
+                                options={"maxiter":150})
+                
+                # Check for success or raise an error
+                if not result.success:
+                    raise ValueError(result.message)
+
+                # Update the Total column with the final dollar value result 
+                self.case_inputs.iat[starting_point,self.total_column_index] = result.fun
+
+                # Update the coefficient columns with the final coefficients
+                for column in range(self.total_column_index):
+                    self.case_inputs.iat[starting_point, column] = result.x[column]
             
-            # Check for success or raise an error
-            if not result.success:
-                raise ValueError(result.message)
-
-            # Update the Total column with the final dollar value result 
-            self.case_inputs.iat[starting_point,self.total_column_index] = result.fun
-
-            # Update the coefficient columns with the final coefficients
-            for column in range(self.total_column_index):
-                self.case_inputs.iat[starting_point, column] = result.x[column]
+            else: 
+                print("This starting point is not within the required bounds: \n", coefficients)
+                print("")
 
             # Timing
             print("\n----------------------------------------------------------------")
             print("Time elapsed for coefficient run: ", time() - self.start_time)
-            print(result)
 
         print(self.case_inputs)
 
@@ -330,7 +377,6 @@ class Priority_Optimizer:
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
 
-        # print("Scenarios tried: ", len(self.pri_scheme_total_dollars))
         # print("Final $ value: $", -optimization_result.fun)
         print("----------------------------------------------------------------")
 
@@ -388,7 +434,8 @@ if __name__ == "__main__":
     - One to run the optimization function 
 + add a bit of variance in dollar value between like orders so all $ values are different
 + Plot each iteration of the optimization function
-- Create a regimen of functions to manually test a variety of funcitons/coefficients
++ Create a regimen of functions to manually test a variety of funcitons/coefficients
 - Try a version that updates the score directly based on dollar value
+- Create guardrails for the input coefficients so that nonacceptable curves are not given a high score
 
 """
