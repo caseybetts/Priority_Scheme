@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd 
 
 from datetime import datetime
-from math import exp, sin, cos, floor, fabs, exp
+from math import exp, sin, cos, ceil, exp
 from numpy import random, count_nonzero, isnan
 from os import listdir
 from scipy.optimize import minimize, fmin
@@ -238,7 +238,6 @@ class Priority_Optimizer:
         """ Checks that the given coefficients create a curve that adheres to the priority value requirements """
         
         pri_max = 100
-        pri_min = 0
         max_multiplyer = 1
         min_multiplyer = 1
         all_values = []
@@ -249,20 +248,20 @@ class Priority_Optimizer:
         # Get all values in a list
         for i in range(1,100):
             all_values.append(self.priority_function(coefficients, i))
-            print(i, ": ", self.priority_function(coefficients, i))
         
         max_val = max(all_values)
         min_val = min(all_values)
 
         if max_val > pri_max:
-            max_multiplyer = floor(max_val - pri_max)
+            max_multiplyer = max_val - pri_max
             print("Max value exceeds max pri: ", max_val, "With these coefficients: ", coefficients)
         
-        if min_val < pri_min:
-            min_multiplyer = fabs(floor(pri_min - min_val)) 
+        # Note: min priority must be 0 to make the multiplyer positive
+        if min_val < 0:
+            min_multiplyer = -min_val
             print("Min value exceeds min pri: ", min_val, "With these coefficients: ", coefficients)    
         
-        return (max_multiplyer**2 + min_multiplyer**2)/2
+        return ceil((max_multiplyer**2 + min_multiplyer**2)/2)
 
     def cost_function(self,coefficients):
         """ Returns the average dollar amount produced by all weather scenarios """
