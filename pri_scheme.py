@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd 
 
 from datetime import datetime
-from math import exp, sin, cos, floor, fabs
+from math import exp, sin, cos, floor, fabs, exp
 from numpy import random, count_nonzero, isnan
 from os import listdir
 from scipy.optimize import minimize, fmin
@@ -39,8 +39,6 @@ class Priority_Optimizer:
         # Optimization related variables
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.final_optimal_coefficients = []
-        self.coefficients = []
         self.run_coefficients = []
         self.iterated_coefficients = []
 
@@ -163,7 +161,7 @@ class Priority_Optimizer:
 
         if x in self.MCP_priority_to_dollar_map.keys():
 
-            return self.MCP_priority_to_dollar_map[x] + rng.standard_normal()*.1 + .6
+            return self.MCP_priority_to_dollar_map[x]
         
     def populate_dollar_values(self):
         """ Populate DollarPerSquare column with dollar values based on existing dollar value or customer """
@@ -182,7 +180,9 @@ class Priority_Optimizer:
         # Return the value of a trig function with 2 variables
         a,b,c,d,e,f,g = coefficients
 
-        return a + (b * (x-10)) + (c * (x-10)**2) + (d * (x-10)**3) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+        priority = a + (b * (x-10)) + (c * exp(0.04*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+
+        return priority
  
     def populate_priority(self, coefficients):
         """ Add a priority to each order based on the dollar value """
@@ -194,13 +194,14 @@ class Priority_Optimizer:
         """ Given a priority will return a score based on the FOM curve"""
 
         # mathematical conversion from the priority to the score
-        return exp(self.coefficient*(self.powers-(5*priority)/self.range))
+        # return exp(self.coefficient*(self.powers-(5*(priority-700))/self.range))
+        return priority
 
     def populate_score(self):
         """ populate a score to each order based on the priority of the order """
 
         # Set the score
-        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score((x.New_Priority)-700), axis=1)
+        self.active_orders.Score = self.active_orders.apply( lambda x: self.priority_to_score(x.New_Priority), axis=1)
 
     def populate_total_score(self, weather_column):
         """ Populate a column for total score which is the score multiplied by the predicted cloud cover """
@@ -246,17 +247,20 @@ class Priority_Optimizer:
         coefficients = [0 if isnan(x) else x for x in coefficients]
 
         # Get all values in a list
-        for i in range(100):
+        for i in range(1,100):
             all_values.append(self.priority_function(coefficients, i))
+            print(i, ": ", self.priority_function(coefficients, i))
         
         max_val = max(all_values)
         min_val = min(all_values)
 
         if max_val > pri_max:
             max_multiplyer = floor(max_val - pri_max)
+            print("Max value exceeds max pri: ", max_val, "With these coefficients: ", coefficients)
         
         if min_val < pri_min:
-            min_multiplyer = fabs(floor(pri_min - min_val))     
+            min_multiplyer = fabs(floor(pri_min - min_val)) 
+            print("Min value exceeds min pri: ", min_val, "With these coefficients: ", coefficients)    
         
         return (max_multiplyer**2 + min_multiplyer**2)/2
 
@@ -311,8 +315,7 @@ class Priority_Optimizer:
             # Get the coefficients
             coefficients = self.case_inputs.iloc[starting_point,:self.total_column_index]
 
-            print("starting point :", starting_point)
-            print(coefficients)
+            print("case number :", starting_point)
 
             if self.curve_check(coefficients) == 1:
                 
@@ -335,8 +338,8 @@ class Priority_Optimizer:
                     self.case_inputs.iat[starting_point, column] = result.x[column]
             
             else: 
-                print("This starting point is not within the required bounds: \n", coefficients)
-                print("")
+                print("This starting point is not within the required bounds: \n", coefficients)     
+
 
             # Timing
             print("\n----------------------------------------------------------------")
@@ -376,33 +379,30 @@ class Priority_Optimizer:
     def display_results(self):
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
-
-        # print("Final $ value: $", -optimization_result.fun)
+        print("----------------------------------------------------------------")
         print("----------------------------------------------------------------")
 
-        print("\n\nThe final prioritization is: ", self.final_optimal_coefficients)
+        x_axis = range(100)
+        # result_colors = ['cornflowerblue', 'tan', 'lightgreen']
+        # iter_colors = ['lavender', 'navajowhite', 'palegreen']
 
-        x_axis = range(30)
-        i=0
-        result_colors = ['cornflowerblue', 'tan', 'lightgreen']
-        iter_colors = ['lavender', 'navajowhite', 'palegreen']
+        # Iterate over the rows of the input cases
+        for row in self.case_inputs.itertuples(index=False, name=None):
 
-        for coefficients in self.coefficients:
-            result_color = result_colors[i]
-            iter_color = iter_colors[i]
-
-            # Plot a line for each iteration of the optimization run
-            for coefficients in self.iterated_coefficients[i]:
-                plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color=iter_color, linestyle='solid')
+            # Get the coefficients
+            coefficients = [0 if isnan(x) else x for x in row[:-1]]
 
             # Plot the final result from each optimization run
-            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color=result_color, linestyle='solid')
+            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='cornflowerblue', linestyle='solid')
+        
+        ax = plt.gca()
+        ax.set_ylim([0, 100])
+        plt.show()
 
-            i+=1
     
         # Plot the final total avreage from the results of all optimization runs
-        plt.plot(x_axis, [self.priority_function(self.final_optimal_coefficients, x) for x in x_axis], '--r')
-        plt.show()
+        # plt.plot(x_axis, [self.priority_function(self.final_optimal_coefficients, x) for x in x_axis], '--r')
+        # plt.show()
 
 
 if __name__ == "__main__":
@@ -411,8 +411,8 @@ if __name__ == "__main__":
     priority_optimizer = Priority_Optimizer()
     priority_optimizer.run_optimizations()
     # priority_optimizer.run_simple_cases()
-    # priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
-    # priority_optimizer.display_results()
+    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
+    priority_optimizer.display_results()
 
 
 
