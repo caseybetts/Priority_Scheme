@@ -70,6 +70,7 @@ class Priority_Optimizer:
         # Load orders and image strips .csv files into pandas dataframes
         self.active_orders = pd.read_csv(self.active_orders_location)
         self.case_inputs = pd.read_csv(loc_case_inputs)
+        self.case_results = self.case_inputs.copy()
 
         # Create variable to contain the latitudes that have orders in them
         self.active_latitudes = set(self.active_orders.Latitude)
@@ -102,11 +103,11 @@ class Priority_Optimizer:
         self.active_orders["Scheduled"] = False 
 
         # Add Total column to the cases dataframe
-        self.case_inputs["Total"] = 0
+        self.case_results["Total"] = 0
 
         # Save the index of new columns
         self.scheduled_column_index = self.active_orders.columns.get_loc("Scheduled")
-        self.total_column_index = self.case_inputs.columns.get_loc("Total")
+        self.total_column_index = self.case_results.columns.get_loc("Total")
             
     def find_cloud_cover(self, lat, lon):
         """ Given a latitude and longitude this will return the nearest cloud cover value from the PWOT .csv """
@@ -174,13 +175,16 @@ class Priority_Optimizer:
         # For cust 306 change the dollar value based on priority using the MCP dollar mapping
         self.active_orders.loc[self.active_orders.Cust_Num == 306, 'DollarPerSquare'] = self.active_orders.Task_Pri.map(lambda x: self.populate_MCP_dollar_value(x)) 
 
+        # Once dollar values are set save the maximum dollar value in a variable
+        self.max_dollar_value = self.active_orders.loc[self.active_orders['DollarPerSquare'].idxmax()]['DollarPerSquare']
+
     def priority_function(self, coefficients, x):
         """ Defines the function for priority as a function of dollar value """
         
         # Return the value of a trig function with 2 variables
         a,b,c,d,e,f,g = coefficients
 
-        priority = a + (b * (x-10)) + (c * exp(0.04*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+        priority = a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
 
         return priority
  
@@ -194,8 +198,11 @@ class Priority_Optimizer:
         """ Given a priority will return a score based on the FOM curve"""
 
         # mathematical conversion from the priority to the score
-        # return exp(self.coefficient*(self.powers-(5*(priority-700))/self.range))
-        return priority
+        # Priority range should be 0-100
+        # return exp(self.coefficient*(self.powers-(5*(priority+700))/self.range))
+
+        # Reverse the priority values so that the lower pri values map to higher score values
+        return 100 - priority
 
     def populate_score(self):
         """ populate a score to each order based on the priority of the order """
@@ -246,7 +253,7 @@ class Priority_Optimizer:
         coefficients = [0 if isnan(x) else x for x in coefficients]
 
         # Get all values in a list
-        for i in range(1,100):
+        for i in range(ceil(self.max_dollar_value)):
             all_values.append(self.priority_function(coefficients, i))
         
         max_val = max(all_values)
@@ -312,7 +319,7 @@ class Priority_Optimizer:
         for starting_point in range(self.case_inputs.index.size):
 
             # Get the coefficients
-            coefficients = self.case_inputs.iloc[starting_point,:self.total_column_index]
+            coefficients = self.case_inputs.iloc[starting_point,:]
 
             print("case number :", starting_point)
 
@@ -329,12 +336,12 @@ class Priority_Optimizer:
                 if not result.success:
                     raise ValueError(result.message)
 
-                # Update the Total column with the final dollar value result 
-                self.case_inputs.iat[starting_point,self.total_column_index] = result.fun
+                # Update the Total column of the results dataframe with the final dollar value result 
+                self.case_results.iat[starting_point,self.total_column_index] = result.fun
 
                 # Update the coefficient columns with the final coefficients
                 for column in range(self.total_column_index):
-                    self.case_inputs.iat[starting_point, column] = result.x[column]
+                    self.case_results.iat[starting_point, column] = result.x[column]
             
             else: 
                 print("This starting point is not within the required bounds: \n", coefficients)     
@@ -342,14 +349,15 @@ class Priority_Optimizer:
 
             # Timing
             print("\n----------------------------------------------------------------")
-            print("Time elapsed for coefficient run: ", time() - self.start_time)
+            print("\n----------------------------------------------------------------")
+            print("Time elapsed for case: ", time() - self.start_time)
 
-        print(self.case_inputs)
+        print(self.case_results)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        self.case_inputs.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
+        self.case_results.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
         
     def run_simple_cases(self):
         """ Will run the cost funciton for all the given test cases """
@@ -357,20 +365,21 @@ class Priority_Optimizer:
         for test_case in range(self.case_inputs.index.size):
 
             # Produce a total dollar value for the current test case
-            self.case_inputs.iat[test_case, self.total_column_index] = self.cost_function(self.case_inputs.iloc[test_case, :self.total_column_index])
+            self.case_results.iat[test_case, self.total_column_index] = self.cost_function(self.case_inputs.iloc[test_case, :])
 
-        print(self.case_inputs)
+        print(self.case_results)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        self.case_inputs.to_csv(r'Test_Case_Outputs\simple_case_results_' + timestamp + '.csv')
+        self.case_results.to_csv(r'Test_Case_Outputs\simple_case_results_' + timestamp + '.csv')
 
     def startup_readout(self):
         """ Prints out useful information prior to running the program """
 
         print("Running ", self.weather_scenarios," weather scenarios")
         print("Optimization Method: ", self.optimization_method)
+        print("Weather Type: ", self.weather_type)
 
         # Timing 
         self.start_time = time()
@@ -378,21 +387,27 @@ class Priority_Optimizer:
     def display_results(self):
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
-        print("----------------------------------------------------------------")
-        print("----------------------------------------------------------------")
-
-        x_axis = range(100)
+        x_axis = range(ceil(self.max_dollar_value))
         # result_colors = ['cornflowerblue', 'tan', 'lightgreen']
         # iter_colors = ['lavender', 'navajowhite', 'palegreen']
 
-        # Iterate over the rows of the input cases
-        for row in self.case_inputs.itertuples(index=False, name=None):
+        # Iterate over the rows of the resulting cases
+        for row in self.case_results.itertuples(index=False, name=None):
 
             # Get the coefficients
             coefficients = [0 if isnan(x) else x for x in row[:-1]]
 
             # Plot the final result from each optimization run
             plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='cornflowerblue', linestyle='solid')
+
+        # Iterate over the rows of the initial cases
+        for row in self.case_inputs.itertuples(index=False, name=None):
+
+            # Get the coefficients
+            coefficients = [0 if isnan(x) else x for x in row]
+
+            # Plot the final result from each optimization run
+            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='lavender', linestyle='solid')
         
         ax = plt.gca()
         ax.set_ylim([0, 100])
