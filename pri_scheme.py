@@ -227,7 +227,9 @@ class Priority_Optimizer:
             order_list = self.active_orders[(self.active_orders.Latitude > latitude) & (self.active_orders.Latitude < latitude + 1)]
             
             if not order_list.empty:
+                # Find the index of the row with the max Total_Score
                 max_index = order_list.Total_Score.idxmax()
+                # Change the Scheduled value of this column to True
                 self.active_orders.iloc[max_index, self.scheduled_column_index ] = True
 
             latitude += 2                                                                                         
@@ -270,8 +272,10 @@ class Priority_Optimizer:
         
         return ceil((max_multiplyer**2 + min_multiplyer**2)/2)
 
-    def cost_function(self,coefficients):
-        """ Returns the average dollar amount produced by all weather scenarios """
+    def cost_function(self, coefficients):
+        """ First applies the given coefficients to the pri curve and changes the priority, score and total score.
+            Then reschedules the order deck.
+            And finally returns the average dollar amount produced by all weather scenarios """
 
         # Timing 
         start_time = time()
@@ -279,7 +283,7 @@ class Priority_Optimizer:
         # Replace the NaN values with 0
         coefficients = [0 if isnan(x) else x for x in coefficients]
 
-        # Check to see if the curve is within acceptable range and update the bad curve multiplier
+        # Check to see if the curve is within acceptable range and update the result multiplier
         multiplyer = self.curve_check(coefficients)
 
         # Populate the priority values and therefore the order scores in the dataframe according to the new coefficients
@@ -291,6 +295,10 @@ class Priority_Optimizer:
         # Populate the total score and schedule the orders accordingly for each weather scenario
         for weather_column in range(self.weather_scenarios):
 
+            # Reset the Scheduled column
+            self.active_orders.Scheduled = False
+
+            # Populate total score based on the current weather file and scheduled the orders
             self.populate_total_score(weather_column)
             self.schedule_orders()
 
