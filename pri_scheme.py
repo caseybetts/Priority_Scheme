@@ -27,7 +27,7 @@ with open(loc_parameter_inputs, 'r') as input:
     parameters = json.load(input)
 
 
-class Priority_Optimizer:
+class Orders:
     """ Contains the functions required to produce an optimal set of priorities for a given set of orders and cloud values """
 
     def __init__(self) -> None:
@@ -46,10 +46,10 @@ class Priority_Optimizer:
         self.cloud_file_names = [x for x in listdir(self.cloud_cover_folder)]
         self.zero_dollar_customer_values = {int(k): v for k,v in parameters["zero_dollar_cust_dpsqkm"].items()}
         self.MCP_priority_to_dollar_map = {int(k): v for k,v in parameters["MCP_dollar_values"].items()}
-        self.weather_scenarios = parameters["number of weather scenarios"]
         self.test_coefficients = parameters["test coefficients"]
         self.predicted_cc_uncertainty = parameters["predicted cloud cover uncertainty"] * 2                     # Standard Deviation of the normal distribution  
         self.cloud_cover_buckets = {}
+        self.weather_scenarios = parameters["number of weather scenarios"]
         self.weather_type = parameters["weather_type"]
         self.scheduled_column_index = 0
 
@@ -60,17 +60,13 @@ class Priority_Optimizer:
 
         # Run initial functions
         self.load_data()
-        self.prepare_dataframes()
-        self.startup_readout()
-
+        self.prepare_dataframe()
         
     def load_data(self):
         """ Load the csv files into pandas dataframes """
 
-        # Load orders and image strips .csv files into pandas dataframes
+        # Load orders .csv files into a pandas dataframe
         self.active_orders = pd.read_csv(self.active_orders_location)
-        self.case_inputs = pd.read_csv(loc_case_inputs)
-        self.case_results = self.case_inputs.copy()
 
         # Create variable to contain the latitudes that have orders in them
         self.active_latitudes = set(self.active_orders.Latitude)
@@ -79,7 +75,7 @@ class Priority_Optimizer:
         self.min_latitude = min(self.active_latitudes)
         self.max_latitude = max(self.active_latitudes)
 
-    def prepare_dataframes(self):
+    def prepare_dataframe(self):
         """ Create and populate all columns required prior to starting the optimization process """
 
         self.add_columns()
@@ -102,12 +98,8 @@ class Priority_Optimizer:
         self.active_orders["Total_Score"] = 0
         self.active_orders["Scheduled"] = False 
 
-        # Add Total column to the cases dataframe
-        self.case_results["Total"] = 0
-
         # Save the index of new columns
         self.scheduled_column_index = self.active_orders.columns.get_loc("Scheduled")
-        self.total_column_index = self.case_results.columns.get_loc("Total")
             
     def find_cloud_cover(self, lat, lon):
         """ Given a latitude and longitude this will return the nearest cloud cover value from the PWOT .csv """
@@ -178,21 +170,11 @@ class Priority_Optimizer:
         # Once dollar values are set save the maximum dollar value in a variable
         self.max_dollar_value = self.active_orders.loc[self.active_orders['DollarPerSquare'].idxmax()]['DollarPerSquare']
 
-    def priority_function(self, coefficients, x):
-        """ Defines the function for priority as a function of dollar value """
-        
-        # Return the value of a trig function with 2 variables
-        a,b,c,d,e,f,g = coefficients
-
-        priority = a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
-
-        return priority
- 
-    def populate_priority(self, coefficients):
+    def populate_priority(self, func):
         """ Add a priority to each order based on the dollar value """
         
         # Set the priority value based on the current dollar to priority funciton
-        self.active_orders.New_Priority = self.active_orders.apply(lambda x: self.priority_function(coefficients, x.DollarPerSquare), axis=1)
+        self.active_orders.New_Priority = self.active_orders.apply(lambda x: func(x.DollarPerSquare), axis=1)
 
     def priority_to_score(self, priority):
         """ Given a priority will return a score based on the FOM curve"""
@@ -243,155 +225,6 @@ class Priority_Optimizer:
 
         return total_dollars
 
-    def curve_check(self, coefficients):
-        """ Checks that the given coefficients create a curve that adheres to the priority value requirements """
-        
-        pri_max = 100
-        max_multiplyer = 1
-        min_multiplyer = 1
-        all_values = []
-
-        # Replace the NaN values with 0
-        coefficients = [0 if isnan(x) else x for x in coefficients]
-
-        # Get all values in a list
-        for i in range(ceil(self.max_dollar_value)):
-            all_values.append(self.priority_function(coefficients, i))
-        
-        max_val = max(all_values)
-        min_val = min(all_values)
-
-        if max_val > pri_max:
-            max_multiplyer = max_val - pri_max
-            print("Max value exceeds max pri: ", max_val, "With these coefficients: ", coefficients)
-        
-        # Note: min priority must be 0 to make the multiplyer positive
-        if min_val < 0:
-            min_multiplyer = -min_val
-            print("Min value exceeds min pri: ", min_val, "With these coefficients: ", coefficients)    
-        
-        return ceil((max_multiplyer**2 + min_multiplyer**2)/2)
-
-    def cost_function(self, coefficients):
-        """ First applies the given coefficients to the pri curve and changes the priority, score and total score.
-            Then reschedules the order deck.
-            And finally returns the average dollar amount produced by all weather scenarios """
-
-        # Timing 
-        start_time = time()
-
-        # Replace the NaN values with 0
-        coefficients = [0 if isnan(x) else x for x in coefficients]
-
-        # Check to see if the curve is within acceptable range and update the result multiplier
-        multiplyer = self.curve_check(coefficients)
-
-        # Populate the priority values and therefore the order scores in the dataframe according to the new coefficients
-        self.populate_priority(coefficients)
-        self.populate_score()
-
-        average_dollar_total = 0
-
-        # Populate the total score and schedule the orders accordingly for each weather scenario
-        for weather_column in range(self.weather_scenarios):
-
-            # Reset the Scheduled column
-            self.active_orders.Scheduled = False
-
-            # Populate total score based on the current weather file and scheduled the orders
-            self.populate_total_score(weather_column)
-            self.schedule_orders()
-
-            # Add the resulting total dollars for the current weather scenario
-            average_dollar_total += self.total_dollars(weather_column)
-
-        # Get the average dollar amounts for all the weather scenarios
-        average_dollar_total = average_dollar_total / self.weather_scenarios
-        # Multiply by the 'out of bounds' multiplyer and add a small random value
-        average_dollar_total = -(average_dollar_total / multiplyer) + (rng.normal() * .1)
-
-        # Timing
-        print("\n----------------------------------------------------------------")
-        print("Time elapsed for cost function: ", time() - start_time)
-        print("Average dollar total: ", average_dollar_total)
-        print("multiplyer:", multiplyer)
-        print("Coefficients:", coefficients)
-
-
-        # Return the average with a small perterbation to keep the optimizer from getting stuck
-        return average_dollar_total
-    
-    def run_optimizations(self):
-        """ Runs the optimizer for each row of initial coefficients in the dataframe """
-
-        for starting_point in range(self.case_inputs.index.size):
-
-            # Get the coefficients
-            coefficients = self.case_inputs.iloc[starting_point,:]
-
-            print("case number :", starting_point)
-
-            if self.curve_check(coefficients) == 1:
-                
-                # Uses the SciPy minimize function to find the optimal prioritization curve to maximize revenue
-                result = minimize(self.cost_function, 
-                                coefficients,
-                                tol=self.optimization_tolerance, 
-                                method=self.optimization_method,
-                                options={"maxiter":150})
-                
-                # Check for success or raise an error
-                if not result.success:
-                    raise ValueError(result.message)
-
-                # Update the Total column of the results dataframe with the final dollar value result 
-                self.case_results.iat[starting_point,self.total_column_index] = result.fun
-
-                # Update the coefficient columns with the final coefficients
-                for column in range(self.total_column_index):
-                    self.case_results.iat[starting_point, column] = result.x[column]
-            
-            else: 
-                print("This starting point is not within the required bounds: \n", coefficients)     
-
-
-            # Timing
-            print("\n----------------------------------------------------------------")
-            print("\n----------------------------------------------------------------")
-            print("Time elapsed for case: ", time() - self.start_time)
-
-        print(self.case_results)
-
-        # Create a .csv file of the resulting dataframe
-        timestamp = str(datetime.now())[:19]
-        timestamp = timestamp.replace(':','-')
-        self.case_results.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
-        
-    def run_simple_cases(self):
-        """ Will run the cost funciton for all the given test cases """
-
-        for test_case in range(self.case_inputs.index.size):
-
-            # Produce a total dollar value for the current test case
-            self.case_results.iat[test_case, self.total_column_index] = self.cost_function(self.case_inputs.iloc[test_case, :])
-
-        print(self.case_results)
-
-        # Create a .csv file of the resulting dataframe
-        timestamp = str(datetime.now())[:19]
-        timestamp = timestamp.replace(':','-')
-        self.case_results.to_csv(r'Test_Case_Outputs\simple_case_results_' + timestamp + '.csv')
-
-    def startup_readout(self):
-        """ Prints out useful information prior to running the program """
-
-        print("Running ", self.weather_scenarios," weather scenarios")
-        print("Optimization Method: ", self.optimization_method)
-        print("Weather Type: ", self.weather_type)
-
-        # Timing 
-        self.start_time = time()
-
     def display_results(self):
         """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
 
@@ -421,20 +254,203 @@ class Priority_Optimizer:
         ax.set_ylim([0, 100])
         plt.show()
 
+
+class Optimizer:
+    """ Object which can use a dataframe of orders and manually or algorithmically produce a maximum dollar value priority curve. """
+
+    def __init__(self) -> None:
+
+        # Optimization related variables
+        self.optimization_method = parameters["optimization method"]
+        self.optimization_tolerance = parameters["optimization tolerance"]
+        self.max_iterations = 150
+        self.run_coefficients = []
+        self.iterated_coefficients = []
+        self.weather_scenarios = parameters["number of weather scenarios"]
+        self.weather_type = parameters["weather_type"]
+
+        # Dataframe
+        self.orders = Orders()
+
+        # Functions
+        self.load_data()
+        self.startup_readout()
+
+    def load_data(self):
+        """ Loads the .csv file with the starting functions into a pandas dataframe """
+
+        self.case_inputs = pd.read_csv(loc_case_inputs)
+        self.case_results = self.case_inputs.copy()
+
+        # Add 'Total' column to the cases dataframe
+        self.case_results["Total"] = 0
+
+        # Save the index of new column
+        self.total_column_index = self.case_results.columns.get_loc("Total")
+
+    def startup_readout(self):
+        """ Prints out useful information prior to running the program """
+
+        print("Running ", self.weather_scenarios," weather scenarios")
+        print("Optimization Method: ", self.optimization_method)
+        print("Weather Type: ", self.weather_type)
+
+        # Timing 
+        self.start_time = time()
+
+    def produce_optimized_curves(self):
+        """ Runs the optimizer for each row of initial coefficients in the dataframe """
+
+        # for each row of the input spreadsheet
+        for starting_point in range(self.case_inputs.index.size):
+
+            # Get the coefficients
+            coefficients = self.case_inputs.iloc[starting_point,:]
+            print("case number :", starting_point)
+
+            # Generate the initial curve in order to perform the curve check on the starting curve
+            a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
+            curve = lambda x: a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+
+            # Make sure the starting function is valid
+            if self.curve_check(curve) == 1:
+                
+                # Uses the SciPy minimize function to find the optimal prioritization curve to maximize revenue
+                result = minimize(self.cost_function, 
+                                coefficients,
+                                tol=self.optimization_tolerance, 
+                                method=self.optimization_method,
+                                options={"maxiter":self.max_iterations})
+                
+                # Raise an error if not successful
+                if not result.success:
+                    raise ValueError(result.message)
+
+                # Update the Total column of the results dataframe with the final dollar value result 
+                self.case_results.iat[starting_point,self.total_column_index] = result.fun
+
+                # Update the coefficient columns with the final coefficients
+                for column in range(self.total_column_index):
+                    self.case_results.iat[starting_point, column] = result.x[column]
+            
+            else: 
+                print("This starting point is not within the required bounds: \n\t", coefficients)     
+
+            # Print the time elapsed for each optimization run
+            print("\n----------------------------------------------------------------")
+            print("\n----------------------------------------------------------------")
+            print("Time elapsed for case: ", time() - self.start_time)
     
-        # Plot the final total avreage from the results of all optimization runs
-        # plt.plot(x_axis, [self.priority_function(self.final_optimal_coefficients, x) for x in x_axis], '--r')
-        # plt.show()
+    def curve_check(self, func):
+        """ Checks that the given coefficients create a curve that adheres to the priority value requirements """
+        
+        pri_max = 100
+        max_multiplyer = 1
+        min_multiplyer = 1
+        all_values = []
+
+        # Get all values in a list
+        for i in range(50):
+            all_values.append(func(i))
+        
+        # Find the max and min values
+        max_val = max(all_values)
+        min_val = min(all_values)
+
+        # If the max value is too large then increase the multiplyer accordingly
+        if max_val > pri_max:
+            max_multiplyer = max_val - pri_max
+        
+        # Note: min priority must be 0 to make the multiplyer positive
+        if min_val < 0:
+            min_multiplyer = -min_val
+        
+        return ceil((max_multiplyer**2 + min_multiplyer**2)/2)
+    
+    def cost_function(self, coefficients):
+        """ First applies the given coefficients to the pri curve and changes the priority, score and total score.
+            Then reschedules the order deck.
+            And finally returns the average dollar amount produced by all weather scenarios """
+
+        # Timing 
+        start_time = time()
+
+        # Generate curve
+        a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
+        curve = lambda x: a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+
+        # Check to see if the curve is within acceptable range and update the result multiplier
+        multiplyer = self.curve_check(curve)
+
+        # Populate the priority values and therefore the order scores in the dataframe according to the new coefficients
+        self.orders.populate_priority(curve)
+        self.orders.populate_score()
+
+        average_dollar_total = 0
+
+        # Populate the total score and schedule the orders accordingly for each weather scenario
+        for weather_column in range(self.weather_scenarios):
+
+            # Reset the Scheduled column
+            self.orders.active_orders.Scheduled = False
+
+            # Populate total score based on the current weather file and scheduled the orders
+            self.orders.populate_total_score(weather_column)
+            self.orders.schedule_orders()
+
+            # Add the resulting total dollars for the current weather scenario
+            average_dollar_total += self.orders.total_dollars(weather_column)
+
+        # Get the average dollar amounts for all the weather scenarios
+        average_dollar_total = average_dollar_total / self.weather_scenarios
+        # Multiply by the 'out of bounds' multiplyer and add a small random value
+        average_dollar_total = -(average_dollar_total / multiplyer) + (rng.normal() * .1)
+
+        # Timing
+        print("\n----------------------------------------------------------------")
+        print("Time elapsed for cost function: ", time() - start_time)
+        print("Average dollar total: ", average_dollar_total)
+        print("multiplyer:", multiplyer)
+        print("Coefficients:", coefficients)
+
+        # Return the average with a small perterbation to keep the optimizer from getting stuck
+        return average_dollar_total
+    
+    def run_simple_cases(self):
+        """ Runs the cost funciton for all the given test cases """
+
+        for test_case in range(self.case_inputs.index.size):
+
+            # Produce a total dollar value for the current test case
+            self.case_results.iat[test_case, self.total_column_index] = self.cost_function(self.case_inputs.iloc[test_case, :])
+
+        print(self.case_results)
+
+        # Create a .csv file of the resulting dataframe
+        timestamp = str(datetime.now())[:19]
+        timestamp = timestamp.replace(':','-')
+        self.case_results.to_csv(r'Test_Case_Outputs\simple_case_results_' + timestamp + '.csv')
+
+    def display_results(self):
+        """ Creates .csv file, print out and plots with the resulting data """
+
+        # print the results of all starting function
+        print(self.case_results)
+
+        # Create a .csv file of the resulting dataframe
+        timestamp = str(datetime.now())[:19]
+        timestamp = timestamp.replace(':','-')
+        self.case_results.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
 
 
 if __name__ == "__main__":
     
     # Create calculator object
-    priority_optimizer = Priority_Optimizer()
-    priority_optimizer.run_optimizations()
-    # priority_optimizer.run_simple_cases()
-    priority_optimizer.active_orders.to_csv('output_from_pri_scheme.csv')
-    priority_optimizer.display_results()
+    optimizer = Optimizer()
+    optimizer.produce_optimized_curves()
+    # optimizer.run_simple_cases()
+    optimizer.orders.active_orders.to_csv('output_from_pri_scheme.csv')
+    optimizer.display_results()
 
 
 
@@ -451,13 +467,13 @@ if __name__ == "__main__":
 - Add weather file name to readout
 - Add a try block before creating the final .csv
 
-- Break code into multiple classes
++ Break code into multiple classes
     - One class to initialize with the parameteres for the pri function (0 meaning that the term will not be used)
     - One to run the optimization function 
 + add a bit of variance in dollar value between like orders so all $ values are different
 + Plot each iteration of the optimization function
 + Create a regimen of functions to manually test a variety of funcitons/coefficients
 - Try a version that updates the score directly based on dollar value
-- Create guardrails for the input coefficients so that nonacceptable curves are not given a high score
++ Create guardrails for the input coefficients so that nonacceptable curves are not given a high score
 
 """
