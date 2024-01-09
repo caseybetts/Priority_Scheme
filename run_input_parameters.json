@@ -62,5 +62,6 @@
     "optimization tolerance": 0.001,
     "predicted cloud cover uncertainty": 0.3,
     "polynomial_degree": 3,
-    "weather_type": "clear"
+    "weather_type": "clear",
+    "plot x-axis": 50
 }
