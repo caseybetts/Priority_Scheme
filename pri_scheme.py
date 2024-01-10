@@ -263,7 +263,7 @@ class Optimizer:
         # Optimization related variables
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.max_iterations = 150
+        self.max_iterations = 10
         self.run_coefficients = []
         self.iterated_coefficients = []
         self.weather_scenarios = parameters["number of weather scenarios"]
@@ -325,10 +325,11 @@ class Optimizer:
                 
                 # Raise an error if not successful
                 if not result.success:
-                    raise ValueError(result.message)
+                    if result.message != "Maximum number of function evaluations has been exceeded.":
+                        raise ValueError("Optimization Failed for starting point: "+ str(starting_point) + "\n\t\t" + result.message)
 
                 # Update the Total column of the results dataframe with the final dollar value result 
-                self.case_results.iat[starting_point,self.total_column_index] = result.fun
+                self.case_results.iat[starting_point,self.total_column_index] = round(result.fun,2)
 
                 # Update the coefficient columns with the final coefficients
                 for column in range(self.total_column_index):
@@ -417,7 +418,7 @@ class Optimizer:
         return average_dollar_total
     
     def produce_curve(self, coefficients):
-        """ Returns a curve function using the given coefficients """
+        """ Returns a function representing a priority curve using the given coefficients """
 
         a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
         return lambda x: a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
@@ -457,6 +458,7 @@ class Optimizer:
         result_values = []
 
         fig, axs = plt.subplots(ceil(case_count/3),3)
+        fig.tight_layout(pad=3.0)
 
         # Iterate over the rows of the initial cases and append the lists of values to the lists
         for row in self.case_inputs.itertuples(index=False, name=None):
@@ -472,6 +474,8 @@ class Optimizer:
             if count < case_count:
                 ax.plot(x_axis, initial_values[count], color='lavender', linestyle='solid')
                 ax.plot(x_axis, result_values[count], color='cornflowerblue', linestyle='solid')
+                ax.set_title("$" + str(-self.case_results.Total[count]))
+                ax.set(xlabel='Dollar Value', ylabel='Priority')
 
         ax = plt.gca()
         ax.set_ylim([0, 100])
