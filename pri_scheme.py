@@ -225,35 +225,6 @@ class Orders:
 
         return total_dollars
 
-    def display_results(self):
-        """ Will print the resulting optimal priority function as well as display a graph of the all the results and the average result """
-
-        x_axis = range(ceil(self.max_dollar_value))
-        # result_colors = ['cornflowerblue', 'tan', 'lightgreen']
-        # iter_colors = ['lavender', 'navajowhite', 'palegreen']
-
-        # Iterate over the rows of the resulting cases
-        for row in self.case_results.itertuples(index=False, name=None):
-
-            # Get the coefficients
-            coefficients = [0 if isnan(x) else x for x in row[:-1]]
-
-            # Plot the final result from each optimization run
-            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='cornflowerblue', linestyle='solid')
-
-        # Iterate over the rows of the initial cases
-        for row in self.case_inputs.itertuples(index=False, name=None):
-
-            # Get the coefficients
-            coefficients = [0 if isnan(x) else x for x in row]
-
-            # Plot the final result from each optimization run
-            plt.plot(x_axis, [self.priority_function(coefficients, x) for x in x_axis], color='lavender', linestyle='solid')
-        
-        ax = plt.gca()
-        ax.set_ylim([0, 100])
-        plt.show()
-
 
 class Optimizer:
     """ Object which can use a dataframe of orders and manually or algorithmically produce a maximum dollar value priority curve. """
@@ -263,12 +234,13 @@ class Optimizer:
         # Optimization related variables
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
-        self.max_iterations = 10
+        self.max_iterations = 150
         self.run_coefficients = []
         self.iterated_coefficients = []
         self.weather_scenarios = parameters["number of weather scenarios"]
         self.weather_type = parameters["weather_type"]
         self.x_axis = parameters["plot x-axis"]
+        
 
         # Dataframe
         self.orders = Orders()
@@ -280,7 +252,9 @@ class Optimizer:
     def load_data(self):
         """ Loads the .csv file with the starting functions into a pandas dataframe """
 
+        # load the initial cases into a pandas df, save the number of cases and create a copy for the results df
         self.case_inputs = pd.read_csv(loc_case_inputs)
+        self.initial_case_count = self.case_inputs.index.size
         self.case_results = self.case_inputs.copy()
 
         # Add 'Total' column to the cases dataframe
@@ -302,16 +276,15 @@ class Optimizer:
     def produce_optimized_curves(self):
         """ Runs the optimizer for each row of initial coefficients in the dataframe """
 
-        # for each row of the input spreadsheet
-        for starting_point in range(self.case_inputs.index.size):
+        # for each row of the input spreadsheet find the optimized coefficients and add the results to the df
+        for starting_point in range(self.initial_case_count):
 
             # Get the coefficients
             coefficients = self.case_inputs.iloc[starting_point,:]
             print("case number :", starting_point)
 
             # Generate the initial curve in order to perform the curve check on the starting curve
-            a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
-            curve = lambda x: a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
+            curve = self.produce_curve(coefficients)
 
             # Make sure the starting function is valid
             if self.curve_check(curve) == 1:
@@ -336,12 +309,34 @@ class Optimizer:
                     self.case_results.iat[starting_point, column] = result.x[column]
             
             else: 
-                print("This starting point is not within the required bounds: \n\t", coefficients)     
+                # Print the coefficients and the curve values if the starting curve is not within bounds
+                print("This starting point is not within the required bounds: \n\t", coefficients)
+                print("Curve values:", [curve(x) for x in range(50)])     
 
             # Print the time elapsed for each optimization run
             print("\n----------------------------------------------------------------")
             print("\n----------------------------------------------------------------")
             print("Time elapsed for case: ", time() - self.start_time)
+
+        # Repeat the above step with the best case as the initial parameters
+        best_row = self.case_results.Total.idxmin()
+        coefficients = self.case_results.iloc[best_row,:-1]
+        # Add the coefficients with the best result to the initial cases df
+        self.case_inputs.loc[self.initial_case_count] = coefficients
+        curve = self.produce_curve(coefficients)
+        # Run the optimizer on the new found coefficient list and save to a class var
+        self.iterative_result = minimize(self.cost_function, 
+                coefficients,
+                tol=self.optimization_tolerance, 
+                method=self.optimization_method,
+                options={"maxiter":self.max_iterations})
+        if not self.iterative_result.success:
+            if self.iterative_result.message != "Maximum number of function evaluations has been exceeded.":
+                raise ValueError("Optimization Failed for starting point: "+ str(starting_point) + "\n\t\t" + self.iterative_result.message)
+        # Append the resulting coefficients and total value to the results df
+        self.case_results.loc[self.initial_case_count] = (list(self.iterative_result.x) + [0])
+        self.case_results.iat[self.initial_case_count, self.total_column_index] = round(self.iterative_result.fun,2)
+
     
     def curve_check(self, func):
         """ Checks that the given coefficients create a curve that adheres to the priority value requirements """
@@ -421,8 +416,7 @@ class Optimizer:
         """ Returns a function representing a priority curve using the given coefficients """
 
         a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
-        return lambda x: a + (b * (x-10)) + (c * exp(0.49*x)) + (d * x**(1/2)) + (e * (x - 10)**4) + (f * sin(x-10)) + (g * cos(x-10))
-
+        return lambda x: a + (b * x) + (c * exp(0.04*x)) + (d * x**(1/2)) + (e * (x - 15)**2) + (f * sin(.2*(x-10))) + (g * cos(.2 * (x-10)))
 
     def run_simple_cases(self):
         """ Runs the cost funciton for all the given test cases """
@@ -444,6 +438,8 @@ class Optimizer:
 
         # print the results of all starting function
         print(self.case_results)
+        print("------------------")
+        print(self.case_inputs)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
@@ -457,7 +453,8 @@ class Optimizer:
         initial_values = []
         result_values = []
 
-        fig, axs = plt.subplots(ceil(case_count/3),3)
+        # Create a figure with several subplots (axs). Number of cases divided by 3 as the number of row and 3 columns
+        fig, axs = plt.subplots(ceil(case_count/3), 3, figsize=(9, 9))
         fig.tight_layout(pad=3.0)
 
         # Iterate over the rows of the initial cases and append the lists of values to the lists
@@ -472,10 +469,12 @@ class Optimizer:
         for count, ax in enumerate(axs.flat):
             
             if count < case_count:
+                ax.plot(x_axis, result_values[count], color='cornflowerblue', linestyle='solid', linewidth=7.0)
                 ax.plot(x_axis, initial_values[count], color='lavender', linestyle='solid')
-                ax.plot(x_axis, result_values[count], color='cornflowerblue', linestyle='solid')
                 ax.set_title("$" + str(-self.case_results.Total[count]))
-                ax.set(xlabel='Dollar Value', ylabel='Priority')
+                ax.set_xlabel('Dollar Value', fontsize = 8) 
+                ax.set_ylabel('Priority', fontsize = 8) 
+                ax.set_ylim([0, 100])
 
         ax = plt.gca()
         ax.set_ylim([0, 100])
