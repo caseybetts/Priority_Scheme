@@ -57,11 +57,11 @@
         [-5,2.5],
         [-4,3]
     ],
-    "number of weather scenarios": 4,
+    "number of weather scenarios": 5,
     "optimization method": "COBYLA",
     "optimization tolerance": 0.001,
     "predicted cloud cover uncertainty": 0.3,
     "polynomial_degree": 3,
-    "weather_type": "clear",
+    "weather_type": "PWOT",
     "plot x-axis": 50
 }

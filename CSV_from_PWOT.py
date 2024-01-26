@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 
 from os import listdir
+from sys import argv 
 
-orders_filename = 'active_orders.csv'
+# Get orders .csv filename 
+orders_filename = argv[1]
 
 def PWOT_dataframe(PWOT_filename):
     """ Returns a dataframe of the raster values with their associated latitudes and longitudes"""
@@ -61,8 +63,13 @@ def dataframe_to_csv(dataframe, filename):
 if __name__ == "__main__":
 
     cloud_file_names = [x for x in listdir('PWOT') if x[-1] == "f"]
+    count = 0
 
     for file in cloud_file_names:
         dataframe_to_csv(trim_PWOT_dataframe(PWOT_dataframe('PWOT\\'+ file)),
-                     'PWOT_CSV\\'+ file[5:18])
-    
+                     'PWOT_CSV\\' + file[5:18] + ".csv")
+        
+        # Print out statusing on the progress
+        count += 1
+        if count in [50,100,150,200]:
+            print(count, " complete")    
