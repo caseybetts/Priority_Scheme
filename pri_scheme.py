@@ -18,24 +18,5 @@ if __name__ == "__main__":
     optimizer = Optimizer(loc_parameter_inputs, loc_case_inputs)
     optimizer.produce_optimized_curves()
     # optimizer.run_simple_cases()
-    optimizer.orders.active_orders.to_csv('output_from_pri_scheme.csv')
+    optimizer.orders.active_orders.to_csv('temp_order_weather_schedule_info.csv')
     optimizer.display_results()
-
-
-
-
-
-# Ideas
-"""
-- Make the curve easy to change
-- Vet the current output and investigate
-
-- Incoperate the max_cc into the scheduling logic
-    - Use max_cc_weather_multiplyer =1/(Weather_Prediction - Max_CC + 1)
-    - Cap the max_cc value at .8 (max_cc values close to 1 will cause the multiplyer to skyrocket)
-- Add weather file name to readout
-- Add a try block before creating the final .csv
-
-- Try a version that updates the score directly based on dollar value
-
-"""

@@ -8,7 +8,8 @@ from Orders import Orders
 
 from datetime import datetime
 from math import ceil, exp, sin, cos, exp
-from numpy import random, isnan
+from numpy import random, isnan, format_float_positional
+from os import path
 from scipy.optimize import minimize
 from time import time
 
@@ -19,7 +20,7 @@ class Optimizer:
     def __init__(self, parameters_location, cases_location) -> None:
 
         # Read in the input parameters
-        self.cases_location = cases_location
+        self.cases_folder, self.cases_name = path.split(cases_location)
         with open(parameters_location, 'r') as input:
             parameters = json.load(input)
 
@@ -27,6 +28,7 @@ class Optimizer:
         self.rng = random.default_rng()
 
         # Optimization related variables
+        self.starting_value = []
         self.optimization_method = parameters["optimization method"]
         self.optimization_tolerance = parameters["optimization tolerance"]
         self.max_iterations = 150
@@ -47,7 +49,7 @@ class Optimizer:
         """ Loads the .csv file with the starting functions into a pandas dataframe """
 
         # load the initial cases into a pandas df, save the number of cases and create a copy for the results df
-        self.case_inputs = pd.read_csv(self.cases_location)
+        self.case_inputs = pd.read_csv(path.join(self.cases_folder, self.cases_name))
         self.initial_case_count = self.case_inputs.index.size
         self.case_results = self.case_inputs.copy()
 
@@ -64,14 +66,14 @@ class Optimizer:
         print("Optimization Method: ", self.optimization_method)
         print("Weather Type: ", self.weather_type)
 
-        # Timing 
-        self.start_time = time()
-
     def produce_optimized_curves(self):
         """ Runs the optimizer for each row of initial coefficients in the dataframe """
 
         # for each row of the input spreadsheet find the optimized coefficients and add the results to the df
         for starting_point in range(self.initial_case_count):
+
+            # Timing 
+            start_time = time()
 
             # Get the coefficients
             coefficients = self.case_inputs.iloc[starting_point,:]
@@ -79,6 +81,9 @@ class Optimizer:
 
             # Generate the initial curve in order to perform the curve check on the starting curve
             curve = self.produce_curve(coefficients)
+
+            # Append the average dollar value result of the starting point to a list
+            self.starting_value.append(self.cost_function(coefficients))
 
             # Make sure the starting function is valid
             if self.curve_check(curve) == 1:
@@ -110,14 +115,19 @@ class Optimizer:
             # Print the time elapsed for each optimization run
             print("\n----------------------------------------------------------------")
             print("\n----------------------------------------------------------------")
-            print("Time elapsed for case: ", time() - self.start_time)
+            print("Time elapsed for case: ", time() - start_time)
 
         # Repeat the above step with the best case as the initial parameters
         best_row = self.case_results.Total.idxmin()
         coefficients = self.case_results.iloc[best_row,:-1]
+
+        # Append the average dollar value result of the starting point to a list
+        self.starting_value.append(self.cost_function(coefficients))
+
         # Add the coefficients with the best result to the initial cases df
         self.case_inputs.loc[self.initial_case_count] = coefficients
         curve = self.produce_curve(coefficients)
+
         # Run the optimizer on the new found coefficient list and save to a class var
         self.iterative_result = minimize(self.cost_function, 
                 coefficients,
@@ -127,6 +137,7 @@ class Optimizer:
         if not self.iterative_result.success:
             if self.iterative_result.message != "Maximum number of function evaluations has been exceeded.":
                 raise ValueError("Optimization Failed for starting point: "+ str(starting_point) + "\n\t\t" + self.iterative_result.message)
+
         # Append the resulting coefficients and total value to the results df
         self.case_results.loc[self.initial_case_count] = (list(self.iterative_result.x) + [0])
         self.case_results.iat[self.initial_case_count, self.total_column_index] = round(self.iterative_result.fun,2)
@@ -196,11 +207,11 @@ class Optimizer:
         average_dollar_total = -(average_dollar_total / multiplyer) + (self.rng.normal() * .1)
 
         # Timing
-        print("\n----------------------------------------------------------------")
-        print("Time elapsed for cost function: ", time() - start_time)
-        print("Average dollar total: ", average_dollar_total)
-        print("multiplyer:", multiplyer)
-        print("Coefficients:", coefficients)
+        # print("\n----------------------------------------------------------------")
+        # print("Time elapsed for cost function: ", time() - start_time)
+        # print("Average dollar total: ", average_dollar_total)
+        # print("multiplyer:", multiplyer)
+        # print("Coefficients:", coefficients)
 
         # Return the average with a small perterbation to keep the optimizer from getting stuck
         return average_dollar_total
@@ -208,8 +219,8 @@ class Optimizer:
     def produce_curve(self, coefficients):
         """ Returns a function representing a priority curve using the given coefficients """
 
-        a,b,c,d,e,f,g = [0 if isnan(x) else x for x in coefficients]
-        return lambda x: a + (b * x) + (c * exp(0.04*x)) + (d * x**(1/2)) + (e * (x - 15)**2) + (f * sin(.2*(x-10))) + (g * cos(.2 * (x-10)))
+        c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11 = [0 if isnan(x) else x for x in coefficients]
+        return lambda x: c1 + (c2 * x) + (c3 * exp(0.04*x)) + (c4 * x**(1/2)) + (c5 * (x - 15)**2) + (c6 * sin(.2*(x-10))) + (c7 * cos(.2*(x-10))) + (c8 * sin(.3*(x-10))) + (c9 * cos(.3*(x-10))) + (c10 * sin(.4*(x-10))) + (c11 * cos(.4*(x-10)))
 
     def run_simple_cases(self):
         """ Runs the cost funciton for all the given test cases """
@@ -230,14 +241,16 @@ class Optimizer:
         """ Creates .csv file, print out and plots with the resulting data """
 
         # print the results of all starting function
-        print(self.case_results)
-        print("------------------")
+        print(" Inputs")
         print(self.case_inputs)
+        print("------------------")
+        print(" Results")
+        print(self.case_results)
 
         # Create a .csv file of the resulting dataframe
         timestamp = str(datetime.now())[:19]
         timestamp = timestamp.replace(':','-')
-        self.case_results.to_csv(r'Test_Case_Outputs\optimization_case_results_' + timestamp + '.csv')
+        self.case_results.to_csv(path.join(self.cases_folder, self.cases_name + 'coefficient_results' + timestamp + '.csv'))
 
         # plot the initial and final curve for each test case
 
@@ -264,13 +277,15 @@ class Optimizer:
             if count < case_count:
                 ax.plot(x_axis, result_values[count], color='cornflowerblue', linestyle='solid', linewidth=7.0)
                 ax.plot(x_axis, initial_values[count], color='lavender', linestyle='solid')
-                ax.set_title("$" + str(-self.case_results.Total[count]))
+                ax.set_title("Final Curve: $" + str(-self.case_results.Total[count]))
+                ax.annotate("Starting Curve: $" + format_float_positional(-self.starting_value[count], precision=2), xy=(2, 1))
                 ax.set_xlabel('Dollar Value', fontsize = 8) 
                 ax.set_ylabel('Priority', fontsize = 8) 
                 ax.set_ylim([0, 100])
 
         ax = plt.gca()
         ax.set_ylim([0, 100])
+        fig.savefig(path.join(self.cases_folder, self.cases_name[:-4] + "_plots"))
         plt.show()
 
 
